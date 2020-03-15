@@ -1,10 +1,11 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
 
 constexpr bool debug = 
 #ifdef _DEBUG

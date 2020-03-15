@@ -10,18 +10,15 @@ Renderer::Renderer() {
 
 	VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
 	createInfo.pApplicationInfo = &appInfo;
-	
-	// Specify validation layers to enable (in debug mode).
+
+	// Specify validation layers to enable.
+	// Empty in release mode.
+	std::vector<char const*> validationLayerNames;
 	if constexpr (debug) {
-		std::array validationLayerNames{
-			"VK_LAYER_LUNARG_standard_validation"
-		};
-		createInfo.enabledLayerCount = validationLayerNames.size();
-		createInfo.ppEnabledLayerNames = validationLayerNames.data();
-	}
-	else {
-		createInfo.enabledLayerCount = 0;
-	}
+		validationLayerNames.push_back("VK_LAYER_LUNARG_standard_validation");
+	}	
+	createInfo.enabledLayerCount = validationLayerNames.size();
+	createInfo.ppEnabledLayerNames = validationLayerNames.data();
 
 	// Specify extensions to load.
 	std::array extensionNames{
@@ -91,6 +88,7 @@ Renderer::Renderer() {
 	}
 
 	auto phyDevice = phyDevices[chosenIndex];
+	(void) phyDevice;
 }
 
 void Renderer::createWindow(uint16_t resX, uint16_t resY) {

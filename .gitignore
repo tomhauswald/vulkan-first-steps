@@ -1,2 +1,4 @@
 windows/x64
 .ipch
+linux/bin
+linux/obj
