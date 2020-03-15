@@ -1,8 +1,8 @@
 #include "renderer.h"
-#include <functional>
 
+// Vulkan resource query with internal return code.
 template<typename Resource, typename ... Args>
-std::vector<Resource> vkQueryVector(
+std::vector<Resource> queryVulkanResources(
 	VkResult(*func)(Args..., uint32_t*, Resource*),
 	Args... args
 ) {
@@ -14,11 +14,22 @@ std::vector<Resource> vkQueryVector(
 	return std::move(items);
 }
 
-Renderer::Renderer() {
+// Vulkan resource query without internal return code.
+template<typename Resource, typename ... Args>
+std::vector<Resource> queryVulkanResources(
+	void(*func)(Args..., uint32_t*, Resource*),
+	Args... args
+) {
+	uint32_t count;
+	std::vector<Resource> items;
+	func(args..., &count, nullptr);
+	items.resize(static_cast<size_t>(count));
+	func(args..., &count, items.data());
+	return std::move(items);
+}
 
-	// Initialize GLFW.
-	crash_if(!glfwInit());
-
+VkInstance createInstance() {
+	
 	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
 	appInfo.apiVersion = VK_API_VERSION_1_2;
 
@@ -44,32 +55,44 @@ Renderer::Renderer() {
 	VkInstance instance;
 	crash_if(vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS);
 
-	VkResult(*test)(VkInstance, uint32_t*, VkPhysicalDevice*) = vkEnumeratePhysicalDevices;
-	(*test)(instance, nullptr, nullptr);
+	return instance;
+}
 
-	auto phyDevices = vkQueryVector<VkPhysicalDevice>(&vkEnumeratePhysicalDevices, instance);
-	std::cout << "Detected " << phyDevices.size() << " GPUs.\n";
+VkPhysicalDevice choosePhysicalDevice(VkInstance instance) {
+	
+	auto phyDevices = queryVulkanResources<VkPhysicalDevice>(&vkEnumeratePhysicalDevices, instance);
+	std::cout << "Detected " << phyDevices.size() << " physical devices.\n";
 
-	std::vector<VkPhysicalDeviceProperties> phyDevProps;
-	std::transform(
-		phyDevices.begin(),
-		phyDevices.end(),
-		std::back_inserter(phyDevProps),
-		[](VkPhysicalDevice pd) {
+	auto phyDevProps = vecToVec<VkPhysicalDevice, VkPhysicalDeviceProperties>(
+		phyDevices, [] (auto device) { 
 			VkPhysicalDeviceProperties prop;
-			vkGetPhysicalDeviceProperties(pd, &prop);
+			vkGetPhysicalDeviceProperties(device, &prop);
 			return prop;
 		}
 	);
 
-	size_t chosenIndex = 0;
+	size_t chosenIndex = -1;
 	for (size_t i = 0; i < phyDevices.size(); ++i) {
+
+		auto families = queryVulkanResources<VkQueueFamilyProperties>(&vkGetPhysicalDeviceQueueFamilyProperties, phyDevices[i]);
+		auto family = std::find_if(families.begin(), families.end(), [](auto fam){ return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; });
+	        auto hasGfx = family != families.end();
 
 		std::cout
 			<< phyDevProps[i].deviceName << " "
+			<< ((hasGfx) ? ("[Graphics support]") : ("")) << " "
 			<< ((phyDevProps[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 				? "[Discrete]" : "[Integrated]") << " "
 			<< "Max pixel count: " << phyDevProps[i].limits.maxImageDimension1D << lf;
+		
+
+		if(!hasGfx) continue;
+		
+		// Choose any suitable device first.
+		if(chosenIndex == -1) {
+			chosenIndex = i;
+			continue;
+		}
 
 		// Choose discrete over integrated.
 		if (
@@ -99,8 +122,21 @@ Renderer::Renderer() {
 		}
 	}
 
-	auto phyDevice = phyDevices[chosenIndex];
-	(void) phyDevice;
+	crash_if(chosenIndex == -1);
+	return phyDevices[chosenIndex];
+}
+
+Renderer::Renderer() {
+
+	// Initialize GLFW.
+	crash_if(!glfwInit());
+	
+	auto instance = createInstance();
+
+	auto device = choosePhysicalDevice(instance);
+	(void) device;
+
+	vkDestroyInstance(instance, nullptr);
 }
 
 void Renderer::createWindow(uint16_t resX, uint16_t resY) {
