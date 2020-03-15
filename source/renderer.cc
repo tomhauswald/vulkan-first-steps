@@ -58,7 +58,7 @@ VkInstance createInstance() {
 	return instance;
 }
 
-VkPhysicalDevice choosePhysicalDevice(VkInstance instance) {
+VkPhysicalDevice choosePhysicalDevice(VkInstance instance, uint32_t& queueFamilyIndex) {
 	
 	auto phyDevices = queryVulkanResources<VkPhysicalDevice>(&vkEnumeratePhysicalDevices, instance);
 	std::cout << "Detected " << phyDevices.size() << " physical devices.\n";
@@ -87,27 +87,27 @@ VkPhysicalDevice choosePhysicalDevice(VkInstance instance) {
 		
 
 		if(!hasGfx) continue;
-		
+	
+		bool isUpgrade = false;
+
 		// Choose any suitable device first.
 		if(chosenIndex == -1) {
-			chosenIndex = i;
-			continue;
+			isUpgrade = true;
 		}
 
 		// Choose discrete over integrated.
-		if (
+		else if(
 			phyDevProps[chosenIndex].deviceType
 			!= VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
 			&&
 			phyDevProps[i].deviceType
 			== VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-			) {
-			chosenIndex = i;
-			continue;
+		) {
+			isUpgrade = true;
 		}
 
 		// Choose GPU of same type with highest image quality.
-		if (
+		else if(
 			phyDevProps[chosenIndex].deviceType
 			== VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
 			&&
@@ -116,14 +116,39 @@ VkPhysicalDevice choosePhysicalDevice(VkInstance instance) {
 			&&
 			phyDevProps[i].limits.maxImageDimension1D
 			> phyDevProps[chosenIndex].limits.maxImageDimension1D
-			) {
+		) {
+			isUpgrade = true;
+		}
+
+		if(isUpgrade) {
 			chosenIndex = i;
-			continue;
+			queueFamilyIndex = (family - families.begin());
 		}
 	}
 
 	crash_if(chosenIndex == -1);
 	return phyDevices[chosenIndex];
+}
+
+VkDevice createDevice(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex) {
+	
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueCount = 1;
+	std::array prios{ 1.0f };
+	queueCreateInfo.pQueuePriorities = prios.data();
+	queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
+
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.pQueueCreateInfos = &queueCreateInfo;
+	createInfo.queueCreateInfoCount = 1;
+	VkPhysicalDeviceFeatures features{};
+	createInfo.pEnabledFeatures = &features;
+
+	VkDevice device;
+	crash_if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS);
+	return device;
 }
 
 Renderer::Renderer() : m_pWindow(nullptr) {
@@ -133,8 +158,10 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	
 	m_instance = createInstance();
 
-	auto device = choosePhysicalDevice(m_instance);
-	(void) device;
+	uint32_t queueFamilyIndex;
+	m_physicalDevice = choosePhysicalDevice(m_instance, queueFamilyIndex);
+	m_device = createDevice(m_physicalDevice, queueFamilyIndex);	
+	vkGetDeviceQueue(m_device, queueFamilyIndex, 0, &m_deviceQueue);
 }
 
 void Renderer::createWindow(uint16_t resX, uint16_t resY) {
@@ -170,6 +197,7 @@ void Renderer::renderScene(Scene const& scene) const {
 }
 
 Renderer::~Renderer() {
+	vkDestroyDevice(m_device, nullptr);
 	vkDestroyInstance(m_instance, nullptr);
 	if (m_pWindow) {
 		glfwDestroyWindow(m_pWindow);

@@ -15,7 +15,12 @@ struct Scene { };
 class Renderer {
 private:
 	GLFWwindow* m_pWindow;
+
 	VkInstance m_instance;
+	VkPhysicalDevice m_physicalDevice;
+	VkDevice m_device;
+	VkQueue m_deviceQueue;
+
 public:
 	Renderer();
 	void createWindow(uint16_t resX, uint16_t resY);;
