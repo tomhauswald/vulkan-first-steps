@@ -45,12 +45,11 @@ VkInstance createInstance() {
 	createInfo.enabledLayerCount = validationLayerNames.size();
 	createInfo.ppEnabledLayerNames = validationLayerNames.data();
 
-	// Specify extensions to load.
-	std::array extensionNames{
-		VK_KHR_SURFACE_EXTENSION_NAME
-	};
-	createInfo.enabledExtensionCount = extensionNames.size();
-	createInfo.ppEnabledExtensionNames = extensionNames.data();
+	// Add the extensions required by GLFW.
+	uint32_t extensionCount;
+	auto extensions = glfwGetRequiredInstanceExtensions(&extensionCount);
+	createInfo.enabledExtensionCount = extensionCount;
+	createInfo.ppEnabledExtensionNames = extensions;
 
 	VkInstance instance;
 	crash_if(vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS);
@@ -58,8 +57,11 @@ VkInstance createInstance() {
 	return instance;
 }
 
-VkPhysicalDevice choosePhysicalDevice(VkInstance instance, uint32_t& queueFamilyIndex) {
-	
+VkPhysicalDevice choosePhysicalDevice(
+	VkInstance instance, 
+	VkSurfaceKHR surface,
+	std::array<uint32_t, QueueRole::_Count>& queueFamilyIndices
+) {	
 	auto phyDevices = queryVulkanResources<VkPhysicalDevice>(&vkEnumeratePhysicalDevices, instance);
 	std::cout << "Detected " << phyDevices.size() << " physical devices.\n";
 
@@ -75,18 +77,28 @@ VkPhysicalDevice choosePhysicalDevice(VkInstance instance, uint32_t& queueFamily
 	for (size_t i = 0; i < phyDevices.size(); ++i) {
 
 		auto families = queryVulkanResources<VkQueueFamilyProperties>(&vkGetPhysicalDeviceQueueFamilyProperties, phyDevices[i]);
-		auto family = std::find_if(families.begin(), families.end(), [](auto fam){ return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; });
-	        auto hasGfx = family != families.end();
+		auto I = range(families.size());
+		
+		auto graphics = std::find_if(families.begin(), families.end(), [] (auto fam) { return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; });			 
+		auto presentation = std::find_if(I.begin(), I.end(), [&] (auto famIdx) {
+			VkBool32 supported;
+			vkGetPhysicalDeviceSurfaceSupportKHR(phyDevices[i], famIdx, surface, &supported);
+			return supported;
+		});
+
+	        auto hasGraphics = (graphics != families.end());
+		auto hasPresentation = (presentation != I.end());
 
 		std::cout
 			<< phyDevProps[i].deviceName << " "
-			<< ((hasGfx) ? ("[Graphics support]") : ("")) << " "
+			<< ((hasGraphics) ? ("[Graphics support]") : ("")) << " "
+			<< ((hasPresentation) ? ("[Presentation support]") : ("")) << " "
 			<< ((phyDevProps[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 				? "[Discrete]" : "[Integrated]") << " "
 			<< "Max pixel count: " << phyDevProps[i].limits.maxImageDimension1D << lf;
 		
 
-		if(!hasGfx) continue;
+		if(!hasGraphics || !hasPresentation) continue;
 	
 		bool isUpgrade = false;
 
@@ -122,7 +134,8 @@ VkPhysicalDevice choosePhysicalDevice(VkInstance instance, uint32_t& queueFamily
 
 		if(isUpgrade) {
 			chosenIndex = i;
-			queueFamilyIndex = (family - families.begin());
+			queueFamilyIndices[QueueRole::Graphics] = (graphics - families.begin());
+			queueFamilyIndices[QueueRole::Presentation] = (presentation - I.begin());
 		}
 	}
 
@@ -130,19 +143,27 @@ VkPhysicalDevice choosePhysicalDevice(VkInstance instance, uint32_t& queueFamily
 	return phyDevices[chosenIndex];
 }
 
-VkDevice createDevice(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex) {
-	
-	VkDeviceQueueCreateInfo queueCreateInfo{};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueCount = 1;
-	std::array prios{ 1.0f };
-	queueCreateInfo.pQueuePriorities = prios.data();
-	queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
+VkDevice createDevice(
+	VkPhysicalDevice physicalDevice, 
+	std::array<uint32_t, QueueRole::_Count> const& queueFamilyIndices	
+) {	
+	std::set<uint32_t> uniqueIndices{queueFamilyIndices.begin(), queueFamilyIndices.end()};
+
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	for(auto index : uniqueIndices) {
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueCount = 1;
+		std::array prios{ 1.0f };
+		queueCreateInfo.pQueuePriorities = prios.data();
+		queueCreateInfo.queueFamilyIndex = index;
+		queueCreateInfos.push_back(queueCreateInfo);
+	}
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
-	createInfo.queueCreateInfoCount = 1;
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.queueCreateInfoCount = queueCreateInfos.size();
 	VkPhysicalDeviceFeatures features{};
 	createInfo.pEnabledFeatures = &features;
 
@@ -151,28 +172,15 @@ VkDevice createDevice(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex
 	return device;
 }
 
-Renderer::Renderer() : m_pWindow(nullptr) {
-
-	// Initialize GLFW.
-	crash_if(!glfwInit());
-	
-	m_instance = createInstance();
-
-	uint32_t queueFamilyIndex;
-	m_physicalDevice = choosePhysicalDevice(m_instance, queueFamilyIndex);
-	m_device = createDevice(m_physicalDevice, queueFamilyIndex);	
-	vkGetDeviceQueue(m_device, queueFamilyIndex, 0, &m_deviceQueue);
-}
-
-void Renderer::createWindow(uint16_t resX, uint16_t resY) {
-
-	// Window must not preexist.
-	crash_if(m_pWindow);
+GLFWwindow* createWindow(VkInstance instance, uint16_t resX, uint16_t resY, VkSurfaceKHR* surface) {
 
 	// Create GLFW window.
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	m_pWindow = glfwCreateWindow(
+	glfwDefaultWindowHints();
+	glfwWindowHint(GLFW_CLIENT_API , GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE  , GLFW_FALSE);
+	glfwWindowHint(GLFW_VISIBLE    , GLFW_FALSE);
+
+	auto window = glfwCreateWindow(
 		resX,
 		resY,
 		"Hello, Vulkan!",
@@ -181,7 +189,32 @@ void Renderer::createWindow(uint16_t resX, uint16_t resY) {
 	);
 
 	// Window creation must succeed.
-	crash_if(!m_pWindow);
+	crash_if(!window);
+
+	// Window surface creation must succeed.
+	auto retval = glfwCreateWindowSurface(instance, window, nullptr, surface);
+	std::cout << retval << lf;
+	crash_if(retval != VK_SUCCESS);
+
+	return window;
+}
+
+Renderer::Renderer() : m_pWindow(nullptr) {
+
+	// Initialize GLFW.
+	crash_if(!glfwInit());
+	
+	m_instance = createInstance();
+	m_pWindow = createWindow(m_instance, 1280, 720, &m_surface);
+
+	std::array<uint32_t, QueueRole::_Count> queueFamilyIndices;
+	m_physicalDevice = choosePhysicalDevice(m_instance, m_surface, queueFamilyIndices);
+	m_device = createDevice(m_physicalDevice, queueFamilyIndices);	
+	for(auto role : range<QueueRole>(QueueRole::_Count)) {
+		vkGetDeviceQueue(m_device, queueFamilyIndices[role], 0, &m_queues[role]);
+	}
+
+	glfwShowWindow(m_pWindow);
 }
 
 bool Renderer::isWindowOpen() const {
@@ -197,6 +230,7 @@ void Renderer::renderScene(Scene const& scene) const {
 }
 
 Renderer::~Renderer() {
+	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 	vkDestroyDevice(m_device, nullptr);
 	vkDestroyInstance(m_instance, nullptr);
 	if (m_pWindow) {

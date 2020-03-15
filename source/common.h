@@ -5,6 +5,7 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -33,3 +34,12 @@ std::vector<OutElem> vecToVec(std::vector<InElem> const& elems, std::function<Ou
 	return std::move(result);
 }
 
+template<typename Elem=size_t>
+std::vector<Elem> range(size_t count) {
+	std::vector<Elem> r;
+	r.resize(count);
+	for(size_t i=0; i<count; ++i) {
+		r[i] = static_cast<Elem>(i);
+	}
+	return std::move(r);
+}

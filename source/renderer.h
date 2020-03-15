@@ -12,6 +12,12 @@
 
 struct Scene { };
 
+enum QueueRole {
+	Graphics,
+	Presentation,
+	_Count
+};
+
 class Renderer {
 private:
 	GLFWwindow* m_pWindow;
@@ -19,11 +25,10 @@ private:
 	VkInstance m_instance;
 	VkPhysicalDevice m_physicalDevice;
 	VkDevice m_device;
-	VkQueue m_deviceQueue;
-
+	std::array<VkQueue, QueueRole::_Count> m_queues;
+	VkSurfaceKHR m_surface;
 public:
 	Renderer();
-	void createWindow(uint16_t resX, uint16_t resY);;
 	bool isWindowOpen() const;
 	void handleWindowEvents();
 	void renderScene(Scene const& scene) const;

@@ -7,7 +7,6 @@ private:
 
 public:
 	int run() {
-		m_renderer.createWindow(1280, 720);
 		while (m_renderer.isWindowOpen()) {
 			m_renderer.renderScene({});
 			m_renderer.handleWindowEvents();
