@@ -1,4 +1,18 @@
 #include "renderer.h"
+#include <functional>
+
+template<typename Resource, typename ... Args>
+std::vector<Resource> vkQueryVector(
+	VkResult(*func)(Args..., uint32_t*, Resource*),
+	Args... args
+) {
+	uint32_t count;
+	std::vector<Resource> items;
+	crash_if(func(args..., &count, nullptr) != VK_SUCCESS);
+	items.resize(static_cast<size_t>(count));
+	func(args..., &count, items.data());
+	return std::move(items);
+}
 
 Renderer::Renderer() {
 
@@ -30,13 +44,11 @@ Renderer::Renderer() {
 	VkInstance instance;
 	crash_if(vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS);
 
-	uint32_t numPhyDevices = 0;
-	std::vector<VkPhysicalDevice> phyDevices;
-	vkEnumeratePhysicalDevices(instance, &numPhyDevices, nullptr);
-	crash_if(numPhyDevices == 0);
-	phyDevices.resize(numPhyDevices);
-	vkEnumeratePhysicalDevices(instance, &numPhyDevices, phyDevices.data());
-	std::cout << "Detected " << numPhyDevices << " GPUs.\n";
+	VkResult(*test)(VkInstance, uint32_t*, VkPhysicalDevice*) = vkEnumeratePhysicalDevices;
+	(*test)(instance, nullptr, nullptr);
+
+	auto phyDevices = vkQueryVector<VkPhysicalDevice>(&vkEnumeratePhysicalDevices, instance);
+	std::cout << "Detected " << phyDevices.size() << " GPUs.\n";
 
 	std::vector<VkPhysicalDeviceProperties> phyDevProps;
 	std::transform(
@@ -51,7 +63,7 @@ Renderer::Renderer() {
 	);
 
 	size_t chosenIndex = 0;
-	for (size_t i = 0; i < numPhyDevices; ++i) {
+	for (size_t i = 0; i < phyDevices.size(); ++i) {
 
 		std::cout
 			<< phyDevProps[i].deviceName << " "
