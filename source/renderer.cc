@@ -28,6 +28,10 @@ std::vector<Resource> queryVulkanResources(
 	return std::move(items);
 }
 
+constexpr std::array requiredExtensions{
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
 VkInstance createInstance() {
 	
 	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
@@ -79,11 +83,26 @@ VkPhysicalDevice choosePhysicalDevice(
 	size_t chosenIndex = -1;
 	for (size_t i = 0; i < phyDevices.size(); ++i) {
 
+		auto extensions = queryVulkanResources<VkExtensionProperties>(
+			&vkEnumerateDeviceExtensionProperties,
+			phyDevices[i],
+			(char const*) nullptr
+		);
+
 		auto families = queryVulkanResources<VkQueueFamilyProperties>(
 			&vkGetPhysicalDeviceQueueFamilyProperties, 
 			phyDevices[i]
 		);
-		auto familyIndices = range(families.size());
+
+		auto hasExtensions = std::all_of(
+			std::begin(requiredExtensions), 
+			std::end(requiredExtensions),
+			[&] (auto const& req) {
+				return contains(extensions, [&] (auto const& ext) { 
+					return !strcmp(req, ext.extensionName); 
+				});
+			}
+		);
 		
 		size_t graphicsFamilyIndex;
 		auto hasGraphics = contains(families, [] (auto fam) { 
@@ -91,7 +110,7 @@ VkPhysicalDevice choosePhysicalDevice(
 		}, &graphicsFamilyIndex);
 
 		size_t presentationFamilyIndex;
-		auto hasPresentation = contains(familyIndices, [&] (auto famIdx) {
+		auto hasPresentation = contains(range(families.size()), [&] (auto famIdx) {
 			VkBool32 supported;
 			vkGetPhysicalDeviceSurfaceSupportKHR(phyDevices[i], famIdx, surface, &supported);
 			return supported;
@@ -99,14 +118,13 @@ VkPhysicalDevice choosePhysicalDevice(
 
 		std::cout
 			<< phyDevProps[i].deviceName << " "
-			<< ((hasGraphics)     ? ("[Graphics support]")     : ("")) << " "
-			<< ((hasPresentation) ? ("[Presentation support]") : ("")) << " "
+			<< ((hasGraphics)     ? ("[Graphics]")     : ("")) << " "
+			<< ((hasPresentation) ? ("[Presentation]") : ("")) << " "
 			<< ((phyDevProps[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-				? "[Discrete]" : "[Integrated]") << " "
-			<< "Max pixel count: " << phyDevProps[i].limits.maxImageDimension1D << lf;
+				? "[Discrete]" : "[Integrated]") << lf;
 		
 
-		if(!hasGraphics || !hasPresentation) continue;
+		if(!hasGraphics || !hasPresentation || !hasExtensions) continue;
 	
 		bool isUpgrade = false;
 
@@ -148,7 +166,16 @@ VkPhysicalDevice choosePhysicalDevice(
 	}
 
 	crash_if(chosenIndex == -1);
-	return phyDevices[chosenIndex];
+	auto physicalDevice = phyDevices[chosenIndex];
+
+	VkSurfaceCapabilitiesKHR surfaceCapabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+
+	std::cout 
+		<< "Max resolution: " << surfaceCapabilities.maxImageExtent.width 
+		<< "x" << surfaceCapabilities.maxImageExtent.height << "." << lf;
+
+	return physicalDevice;
 }
 
 VkDevice createDevice(
@@ -174,6 +201,8 @@ VkDevice createDevice(
 	createInfo.queueCreateInfoCount = queueCreateInfos.size();
 	VkPhysicalDeviceFeatures features{};
 	createInfo.pEnabledFeatures = &features;
+	createInfo.enabledExtensionCount = requiredExtensions.size();
+	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
 	VkDevice device;
 	crash_if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS);
@@ -200,9 +229,7 @@ GLFWwindow* createWindow(VkInstance instance, uint16_t resX, uint16_t resY, VkSu
 	crash_if(!window);
 
 	// Window surface creation must succeed.
-	auto retval = glfwCreateWindowSurface(instance, window, nullptr, surface);
-	std::cout << retval << lf;
-	crash_if(retval != VK_SUCCESS);
+	crash_if(glfwCreateWindowSurface(instance, window, nullptr, surface) != VK_SUCCESS);
 
 	return window;
 }
