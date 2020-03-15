@@ -126,17 +126,15 @@ VkPhysicalDevice choosePhysicalDevice(VkInstance instance) {
 	return phyDevices[chosenIndex];
 }
 
-Renderer::Renderer() {
+Renderer::Renderer() : m_pWindow(nullptr) {
 
 	// Initialize GLFW.
 	crash_if(!glfwInit());
 	
-	auto instance = createInstance();
+	m_instance = createInstance();
 
-	auto device = choosePhysicalDevice(instance);
+	auto device = choosePhysicalDevice(m_instance);
 	(void) device;
-
-	vkDestroyInstance(instance, nullptr);
 }
 
 void Renderer::createWindow(uint16_t resX, uint16_t resY) {
@@ -172,6 +170,7 @@ void Renderer::renderScene(Scene const& scene) const {
 }
 
 Renderer::~Renderer() {
+	vkDestroyInstance(m_instance, nullptr);
 	if (m_pWindow) {
 		glfwDestroyWindow(m_pWindow);
 	}

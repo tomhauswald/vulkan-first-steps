@@ -14,9 +14,8 @@ struct Scene { };
 
 class Renderer {
 private:
-	GLFWwindow* m_pWindow = nullptr;
-	std::vector<VkExtensionProperties> m_vkExtProps;
-
+	GLFWwindow* m_pWindow;
+	VkInstance m_instance;
 public:
 	Renderer();
 	void createWindow(uint16_t resX, uint16_t resY);;
