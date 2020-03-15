@@ -62,10 +62,13 @@ VkPhysicalDevice choosePhysicalDevice(
 	VkSurfaceKHR surface,
 	std::array<uint32_t, QueueRole::_Count>& queueFamilyIndices
 ) {	
-	auto phyDevices = queryVulkanResources<VkPhysicalDevice>(&vkEnumeratePhysicalDevices, instance);
+	auto phyDevices = queryVulkanResources<VkPhysicalDevice>(
+		&vkEnumeratePhysicalDevices,
+		instance
+	);
 	std::cout << "Detected " << phyDevices.size() << " physical devices.\n";
 
-	auto phyDevProps = vecToVec<VkPhysicalDevice, VkPhysicalDeviceProperties>(
+	auto phyDevProps = mapToVector<decltype(phyDevices), VkPhysicalDeviceProperties>(
 		phyDevices, [] (auto device) { 
 			VkPhysicalDeviceProperties prop;
 			vkGetPhysicalDeviceProperties(device, &prop);
@@ -76,22 +79,27 @@ VkPhysicalDevice choosePhysicalDevice(
 	size_t chosenIndex = -1;
 	for (size_t i = 0; i < phyDevices.size(); ++i) {
 
-		auto families = queryVulkanResources<VkQueueFamilyProperties>(&vkGetPhysicalDeviceQueueFamilyProperties, phyDevices[i]);
-		auto I = range(families.size());
+		auto families = queryVulkanResources<VkQueueFamilyProperties>(
+			&vkGetPhysicalDeviceQueueFamilyProperties, 
+			phyDevices[i]
+		);
+		auto familyIndices = range(families.size());
 		
-		auto graphics = std::find_if(families.begin(), families.end(), [] (auto fam) { return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; });			 
-		auto presentation = std::find_if(I.begin(), I.end(), [&] (auto famIdx) {
+		size_t graphicsFamilyIndex;
+		auto hasGraphics = contains(families, [] (auto fam) { 
+			return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; 
+		}, &graphicsFamilyIndex);
+
+		size_t presentationFamilyIndex;
+		auto hasPresentation = contains(familyIndices, [&] (auto famIdx) {
 			VkBool32 supported;
 			vkGetPhysicalDeviceSurfaceSupportKHR(phyDevices[i], famIdx, surface, &supported);
 			return supported;
-		});
-
-	        auto hasGraphics = (graphics != families.end());
-		auto hasPresentation = (presentation != I.end());
+		}, &presentationFamilyIndex);
 
 		std::cout
 			<< phyDevProps[i].deviceName << " "
-			<< ((hasGraphics) ? ("[Graphics support]") : ("")) << " "
+			<< ((hasGraphics)     ? ("[Graphics support]")     : ("")) << " "
 			<< ((hasPresentation) ? ("[Presentation support]") : ("")) << " "
 			<< ((phyDevProps[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 				? "[Discrete]" : "[Integrated]") << " "
@@ -134,8 +142,8 @@ VkPhysicalDevice choosePhysicalDevice(
 
 		if(isUpgrade) {
 			chosenIndex = i;
-			queueFamilyIndices[QueueRole::Graphics] = (graphics - families.begin());
-			queueFamilyIndices[QueueRole::Presentation] = (presentation - I.begin());
+			queueFamilyIndices[QueueRole::Graphics] = graphicsFamilyIndex;
+			queueFamilyIndices[QueueRole::Presentation] = presentationFamilyIndex;
 		}
 	}
 
