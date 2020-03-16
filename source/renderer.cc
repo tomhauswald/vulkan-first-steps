@@ -32,7 +32,7 @@ constexpr std::array requiredExtensions{
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-VkInstance createInstance() {
+void createInstance(VulkanContext& ctx) {
 	
 	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
 	appInfo.apiVersion = VK_API_VERSION_1_2;
@@ -55,134 +55,151 @@ VkInstance createInstance() {
 	createInfo.enabledExtensionCount = extensionCount;
 	createInfo.ppEnabledExtensionNames = extensions;
 
-	VkInstance instance;
-	crash_if(vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS);
-
-	return instance;
+	crash_if(vkCreateInstance(&createInfo, nullptr, &ctx.instance) != VK_SUCCESS);
 }
 
-VkPhysicalDevice choosePhysicalDevice(
-	VkInstance instance, 
-	VkSurfaceKHR surface,
-	std::array<uint32_t, QueueRole::_Count>& queueFamilyIndices
-) {	
-	auto phyDevices = queryVulkanResources<VkPhysicalDevice>(
+void selectPhysicalDevice(VulkanContext& ctx) {
+
+	ctx.physicalDevices = queryVulkanResources<VkPhysicalDevice, VkInstance>(
 		&vkEnumeratePhysicalDevices,
-		instance
-	);
-	std::cout << "Detected " << phyDevices.size() << " physical devices.\n";
-
-	auto phyDevProps = mapToVector<decltype(phyDevices), VkPhysicalDeviceProperties>(
-		phyDevices, [] (auto device) { 
-			VkPhysicalDeviceProperties prop;
-			vkGetPhysicalDeviceProperties(device, &prop);
-			return prop;
-		}
+		ctx.instance
 	);
 
-	size_t chosenIndex = -1;
-	for (size_t i = 0; i < phyDevices.size(); ++i) {
+	ctx.physicalDevice = nullptr;
+	for(auto const& candidate : ctx.physicalDevices) {
 
-		auto extensions = queryVulkanResources<VkExtensionProperties>(
+		vkGetPhysicalDeviceProperties(candidate, &ctx.physicalDeviceProperties[candidate]);
+		auto const& props = ctx.physicalDeviceProperties[candidate];
+
+		ctx.physicalDeviceExtensions[candidate] = queryVulkanResources<
+			VkExtensionProperties, 
+			VkPhysicalDevice, 
+			char const*
+		>(
 			&vkEnumerateDeviceExtensionProperties,
-			phyDevices[i],
-			(char const*) nullptr
+			candidate,
+			nullptr
 		);
 
-		auto families = queryVulkanResources<VkQueueFamilyProperties>(
+		ctx.physicalDeviceQueueFamilies[candidate] = queryVulkanResources<
+			VkQueueFamilyProperties, 
+			VkPhysicalDevice
+		>(
 			&vkGetPhysicalDeviceQueueFamilyProperties, 
-			phyDevices[i]
+			candidate
 		);
 
 		auto hasExtensions = std::all_of(
 			std::begin(requiredExtensions), 
 			std::end(requiredExtensions),
 			[&] (auto const& req) {
-				return contains(extensions, [&] (auto const& ext) { 
-					return !strcmp(req, ext.extensionName); 
-				});
+				return contains(
+					ctx.physicalDeviceExtensions[candidate], 
+					[&] (auto const& ext) { 
+						return !strcmp(req, ext.extensionName); 
+					}
+				);
 			}
 		);
 		
 		size_t graphicsFamilyIndex;
-		auto hasGraphics = contains(families, [] (auto fam) { 
-			return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; 
-		}, &graphicsFamilyIndex);
+		auto hasGraphics = contains(
+			ctx.physicalDeviceQueueFamilies[candidate], 
+			[] (auto fam) { 
+				return fam.queueFlags & VK_QUEUE_GRAPHICS_BIT; 
+			}, 
+			&graphicsFamilyIndex
+		);
 
 		size_t presentationFamilyIndex;
-		auto hasPresentation = contains(range(families.size()), [&] (auto famIdx) {
-			VkBool32 supported;
-			vkGetPhysicalDeviceSurfaceSupportKHR(phyDevices[i], famIdx, surface, &supported);
-			return supported;
-		}, &presentationFamilyIndex);
+		auto hasPresentation = contains(
+			range(ctx.physicalDeviceQueueFamilies[candidate].size()), 
+			[&] (auto famIdx) {
+				VkBool32 supported;
+				vkGetPhysicalDeviceSurfaceSupportKHR(candidate, famIdx, ctx.windowSurface, &supported);
+				return supported;
+			}, 
+			&presentationFamilyIndex
+		);
+
+		ctx.physicalDeviceSurfaceFormats[candidate] = queryVulkanResources<
+			VkSurfaceFormatKHR, 
+			VkPhysicalDevice, 
+			VkSurfaceKHR
+		>(
+			&vkGetPhysicalDeviceSurfaceFormatsKHR,
+			candidate,
+			ctx.windowSurface
+		);
+
+		size_t bgraFormatIndex;
+		auto hasBGRA = contains(
+			ctx.physicalDeviceSurfaceFormats[candidate], 
+			[] (VkSurfaceFormatKHR const& fmt) { 
+				return fmt.format == VK_FORMAT_B8G8R8A8_SRGB 
+				&& fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+			}, 
+			&bgraFormatIndex
+		);
 
 		std::cout
-			<< phyDevProps[i].deviceName << " "
+			<< props.deviceName << " "
 			<< ((hasGraphics)     ? ("[Graphics]")     : ("")) << " "
 			<< ((hasPresentation) ? ("[Presentation]") : ("")) << " "
-			<< ((phyDevProps[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+			<< ((props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 				? "[Discrete]" : "[Integrated]") << lf;
 		
-
-		if(!hasGraphics || !hasPresentation || !hasExtensions) continue;
+		// Skip unsuitable devices.
+		if( !hasExtensions    ||
+			!hasGraphics      || 
+		    !hasPresentation  || 
+			!hasBGRA
+		) continue;
 	
 		bool isUpgrade = false;
 
 		// Choose any suitable device first.
-		if(chosenIndex == -1) {
+		if(!ctx.physicalDevice) {
 			isUpgrade = true;
 		}
 
-		// Choose discrete over integrated.
-		else if(
-			phyDevProps[chosenIndex].deviceType
-			!= VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-			&&
-			phyDevProps[i].deviceType
-			== VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-		) {
-			isUpgrade = true;
-		}
+		else {
+			auto const& prevProps = ctx.physicalDeviceProperties[ctx.physicalDevice];
 
-		// Choose GPU of same type with highest image quality.
-		else if(
-			phyDevProps[chosenIndex].deviceType
-			== VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-			&&
-			phyDevProps[i].deviceType
-			== VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-			&&
-			phyDevProps[i].limits.maxImageDimension1D
-			> phyDevProps[chosenIndex].limits.maxImageDimension1D
-		) {
-			isUpgrade = true;
+			// Choose discrete over integrated.
+			if(
+				prevProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+			   	props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+			){
+				isUpgrade = true;
+			}
+
+			// Choose GPU of same type with highest image quality.
+			else if(
+				prevProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+				props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+				props.limits.maxImageDimension1D > prevProps.limits.maxImageDimension1D
+			) {
+				isUpgrade = true;
+			}
 		}
 
 		if(isUpgrade) {
-			chosenIndex = i;
-			queueFamilyIndices[QueueRole::Graphics] = graphicsFamilyIndex;
-			queueFamilyIndices[QueueRole::Presentation] = presentationFamilyIndex;
+			ctx.physicalDevice = candidate;
+			ctx.queueFamilyIndices[QueueRole::Graphics] = graphicsFamilyIndex;
+			ctx.queueFamilyIndices[QueueRole::Presentation] = presentationFamilyIndex;
 		}
 	}
 
-	crash_if(chosenIndex == -1);
-	auto physicalDevice = phyDevices[chosenIndex];
-
-	VkSurfaceCapabilitiesKHR surfaceCapabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
-
-	std::cout 
-		<< "Max resolution: " << surfaceCapabilities.maxImageExtent.width 
-		<< "x" << surfaceCapabilities.maxImageExtent.height << "." << lf;
-
-	return physicalDevice;
+	crash_if(!ctx.physicalDevice);
 }
 
-VkDevice createDevice(
-	VkPhysicalDevice physicalDevice, 
-	std::array<uint32_t, QueueRole::_Count> const& queueFamilyIndices	
-) {	
-	std::set<uint32_t> uniqueIndices{queueFamilyIndices.begin(), queueFamilyIndices.end()};
+void createDevice(VulkanContext& ctx) {
+
+	std::set<uint32_t> uniqueIndices {
+		ctx.queueFamilyIndices.begin(), 
+		ctx.queueFamilyIndices.end()
+	};
 
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	for(auto index : uniqueIndices) {
@@ -204,12 +221,51 @@ VkDevice createDevice(
 	createInfo.enabledExtensionCount = requiredExtensions.size();
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
-	VkDevice device;
-	crash_if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS);
-	return device;
+	crash_if(vkCreateDevice(ctx.physicalDevice, &createInfo, nullptr, &ctx.device) != VK_SUCCESS);
+
+	for(auto role : range<QueueRole>(QueueRole::_Count)) {
+		vkGetDeviceQueue(ctx.device, ctx.queueFamilyIndices[role], 0, &ctx.queues[role]);
+	}
 }
 
-GLFWwindow* createWindow(VkInstance instance, uint16_t resX, uint16_t resY, VkSurfaceKHR* surface) {
+void createSwapchain(VulkanContext& ctx) {
+
+	VkSurfaceCapabilitiesKHR surfaceCapabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx.physicalDevice, ctx.windowSurface, &surfaceCapabilities);
+	
+	auto maxImages = (
+		surfaceCapabilities.maxImageCount 
+			? surfaceCapabilities.maxImageCount 
+			: UINT32_MAX
+	);
+	
+	VkSwapchainCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = ctx.windowSurface;
+	createInfo.minImageCount = std::min(surfaceCapabilities.minImageCount + 1, maxImages);
+	createInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	createInfo.imageExtent = ctx.windowExtent;
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	createInfo.preTransform = surfaceCapabilities.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+	createInfo.clipped = VK_TRUE;
+
+	std::set<uint32_t> uniqueIndices{
+		ctx.queueFamilyIndices.begin(), 
+		ctx.queueFamilyIndices.end()
+	};
+	auto sameQueue = (uniqueIndices.size() == 1);
+	createInfo.imageSharingMode      = sameQueue ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
+	createInfo.queueFamilyIndexCount = sameQueue ? QueueRole::_Count : 0;
+	createInfo.pQueueFamilyIndices   = sameQueue ? ctx.queueFamilyIndices.data() : nullptr;
+
+	crash_if(vkCreateSwapchainKHR(ctx.device, &createInfo, nullptr, &ctx.swapchain) != VK_SUCCESS);
+}
+
+GLFWwindow* createWindow(VulkanContext& ctx, uint32_t resX, uint32_t resY) {
 
 	// Create GLFW window.
 	glfwDefaultWindowHints();
@@ -217,9 +273,10 @@ GLFWwindow* createWindow(VkInstance instance, uint16_t resX, uint16_t resY, VkSu
 	glfwWindowHint(GLFW_RESIZABLE  , GLFW_FALSE);
 	glfwWindowHint(GLFW_VISIBLE    , GLFW_FALSE);
 
+	ctx.windowExtent = { resX, resY };
 	auto window = glfwCreateWindow(
-		resX,
-		resY,
+		static_cast<int>(ctx.windowExtent.width),
+		static_cast<int>(ctx.windowExtent.height),
 		"Hello, Vulkan!",
 		nullptr,
 		nullptr
@@ -229,7 +286,7 @@ GLFWwindow* createWindow(VkInstance instance, uint16_t resX, uint16_t resY, VkSu
 	crash_if(!window);
 
 	// Window surface creation must succeed.
-	crash_if(glfwCreateWindowSurface(instance, window, nullptr, surface) != VK_SUCCESS);
+	crash_if(glfwCreateWindowSurface(ctx.instance, window, nullptr, &ctx.windowSurface) != VK_SUCCESS);
 
 	return window;
 }
@@ -239,15 +296,18 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	// Initialize GLFW.
 	crash_if(!glfwInit());
 	
-	m_instance = createInstance();
-	m_pWindow = createWindow(m_instance, 1280, 720, &m_surface);
+	// Initialize Vulkan.
+	createInstance(m_vkCtx);
+	m_pWindow = createWindow(m_vkCtx, 1280, 720);
+	selectPhysicalDevice(m_vkCtx);
+	createDevice(m_vkCtx);
+	createSwapchain(m_vkCtx);
 
-	std::array<uint32_t, QueueRole::_Count> queueFamilyIndices;
-	m_physicalDevice = choosePhysicalDevice(m_instance, m_surface, queueFamilyIndices);
-	m_device = createDevice(m_physicalDevice, queueFamilyIndices);	
-	for(auto role : range<QueueRole>(QueueRole::_Count)) {
-		vkGetDeviceQueue(m_device, queueFamilyIndices[role], 0, &m_queues[role]);
-	}
+	vkDestroySwapchainKHR(
+		m_vkCtx.device, 
+		m_vkCtx.swapchain,
+		nullptr
+	);
 
 	glfwShowWindow(m_pWindow);
 }
@@ -265,11 +325,13 @@ void Renderer::renderScene(Scene const& scene) const {
 }
 
 Renderer::~Renderer() {
-	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-	vkDestroyDevice(m_device, nullptr);
-	vkDestroyInstance(m_instance, nullptr);
-	if (m_pWindow) {
-		glfwDestroyWindow(m_pWindow);
-	}
+
+	// Free Vulkan resources.
+	vkDestroySurfaceKHR(m_vkCtx.instance, m_vkCtx.windowSurface, nullptr);
+	vkDestroyDevice(m_vkCtx.device, nullptr);
+	vkDestroyInstance(m_vkCtx.instance, nullptr);
+	
+	// Free GLFW resources.
+	if (m_pWindow) glfwDestroyWindow(m_pWindow);
 	glfwTerminate();
 }
