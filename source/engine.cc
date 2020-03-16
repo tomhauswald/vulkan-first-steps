@@ -15,4 +15,6 @@ public:
 	}
 };
 
-int main() { return Engine{}.run(); }
+int main() { 
+	return Engine{}.run();
+}

@@ -18,27 +18,31 @@ enum QueueRole {
 	_Count
 };
 
+template<typename V>
+using PerPhysicalDevice = std::unordered_map<VkPhysicalDevice, V>;
+
 struct VulkanContext {
 
 	VkInstance instance;
 
 	VkPhysicalDevice physicalDevice;
 	std::vector<VkPhysicalDevice> physicalDevices;
-	std::unordered_map<VkPhysicalDevice, VkPhysicalDeviceProperties> physicalDeviceProperties;
-	std::unordered_map<VkPhysicalDevice, std::vector<VkExtensionProperties>> physicalDeviceExtensions;
-	std::unordered_map<VkPhysicalDevice, std::vector<VkQueueFamilyProperties>> physicalDeviceQueueFamilies;
-	std::unordered_map<VkPhysicalDevice, std::vector<VkSurfaceFormatKHR>> physicalDeviceSurfaceFormats;
+	PerPhysicalDevice<VkPhysicalDeviceProperties> physicalDeviceProperties;
+	PerPhysicalDevice<std::vector<VkSurfaceFormatKHR>> physicalDeviceSurfaceFormats;
+	PerPhysicalDevice<std::vector<VkExtensionProperties>> physicalDeviceExtensions;
+	PerPhysicalDevice<std::vector<VkQueueFamilyProperties>> physicalDeviceQueueFamilies;
 
 	VkDevice device;
 
 	VkExtent2D windowExtent;
 	VkSurfaceKHR windowSurface;
-	std::vector<VkSurfaceFormatKHR> surfaceFormats;
 
 	std::array<uint32_t, QueueRole::_Count> queueFamilyIndices;
 	std::array<VkQueue, QueueRole::_Count> queues;
 
 	VkSwapchainKHR swapchain;
+	std::vector<VkImage> swapchainImages;
+	std::vector<VkImageView> swapchainImageViews;
 };
 
 class Renderer {

@@ -28,8 +28,12 @@ std::vector<Resource> queryVulkanResources(
 	return std::move(items);
 }
 
-constexpr std::array requiredExtensions{
+constexpr std::array requiredDeviceExtensions{
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
+constexpr std::array validationLayers{
+	"VK_LAYER_LUNARG_standard_validation"
 };
 
 void createInstance(VulkanContext& ctx) {
@@ -40,14 +44,9 @@ void createInstance(VulkanContext& ctx) {
 	VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
 	createInfo.pApplicationInfo = &appInfo;
 
-	// Specify validation layers to enable.
-	// Empty in release mode.
-	std::vector<char const*> validationLayerNames;
-	if constexpr (debug) {
-		validationLayerNames.push_back("VK_LAYER_LUNARG_standard_validation");
-	}	
-	createInfo.enabledLayerCount = validationLayerNames.size();
-	createInfo.ppEnabledLayerNames = validationLayerNames.data();
+	// Specify validation layers to enable in debug mode.
+	createInfo.enabledLayerCount   = debug ? validationLayers.size() : 0;
+	createInfo.ppEnabledLayerNames = debug ? validationLayers.data() : nullptr;
 
 	// Add the extensions required by GLFW.
 	uint32_t extensionCount;
@@ -90,8 +89,8 @@ void selectPhysicalDevice(VulkanContext& ctx) {
 		);
 
 		auto hasExtensions = std::all_of(
-			std::begin(requiredExtensions), 
-			std::end(requiredExtensions),
+			std::begin(requiredDeviceExtensions), 
+			std::end(requiredDeviceExtensions),
 			[&] (auto const& req) {
 				return contains(
 					ctx.physicalDeviceExtensions[candidate], 
@@ -218,8 +217,8 @@ void createDevice(VulkanContext& ctx) {
 	createInfo.queueCreateInfoCount = queueCreateInfos.size();
 	VkPhysicalDeviceFeatures features{};
 	createInfo.pEnabledFeatures = &features;
-	createInfo.enabledExtensionCount = requiredExtensions.size();
-	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+	createInfo.enabledExtensionCount = requiredDeviceExtensions.size();
+	createInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
 
 	crash_if(vkCreateDevice(ctx.physicalDevice, &createInfo, nullptr, &ctx.device) != VK_SUCCESS);
 
@@ -263,6 +262,32 @@ void createSwapchain(VulkanContext& ctx) {
 	createInfo.pQueueFamilyIndices   = sameQueue ? ctx.queueFamilyIndices.data() : nullptr;
 
 	crash_if(vkCreateSwapchainKHR(ctx.device, &createInfo, nullptr, &ctx.swapchain) != VK_SUCCESS);
+
+	ctx.swapchainImages = queryVulkanResources<VkImage, VkDevice, VkSwapchainKHR>(
+		&vkGetSwapchainImagesKHR,
+		ctx.device,
+		ctx.swapchain
+	);
+
+	ctx.swapchainImageViews = mapToVector<decltype(ctx.swapchainImages), VkImageView>(
+		ctx.swapchainImages,
+		[&] (auto image) {
+			VkImageViewCreateInfo createInfo{};
+			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			createInfo.image = image;
+			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			createInfo.format = VK_FORMAT_B8G8R8A8_SRGB;
+			
+			auto& srr = createInfo.subresourceRange;
+			srr.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			srr.levelCount = 1;
+			srr.layerCount = 1;
+
+			VkImageView view;
+			crash_if(vkCreateImageView(ctx.device, &createInfo, nullptr, &view) != VK_SUCCESS);
+			return std::move(view);
+		}
+	);
 }
 
 GLFWwindow* createWindow(VulkanContext& ctx, uint32_t resX, uint32_t resY) {
@@ -303,12 +328,6 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	createDevice(m_vkCtx);
 	createSwapchain(m_vkCtx);
 
-	vkDestroySwapchainKHR(
-		m_vkCtx.device, 
-		m_vkCtx.swapchain,
-		nullptr
-	);
-
 	glfwShowWindow(m_pWindow);
 }
 
@@ -326,12 +345,23 @@ void Renderer::renderScene(Scene const& scene) const {
 
 Renderer::~Renderer() {
 
-	// Free Vulkan resources.
-	vkDestroySurfaceKHR(m_vkCtx.instance, m_vkCtx.windowSurface, nullptr);
+	// Free Vulkan resources:
+
+	for(auto view : m_vkCtx.swapchainImageViews) {
+		vkDestroyImageView(m_vkCtx.device, view, nullptr);
+	}
+
+	vkDestroySwapchainKHR(m_vkCtx.device, m_vkCtx.swapchain, nullptr);
 	vkDestroyDevice(m_vkCtx.device, nullptr);
+
+	vkDestroySurfaceKHR(m_vkCtx.instance, m_vkCtx.windowSurface, nullptr);
 	vkDestroyInstance(m_vkCtx.instance, nullptr);
 	
-	// Free GLFW resources.
-	if (m_pWindow) glfwDestroyWindow(m_pWindow);
+	// Free GLFW resources:
+
+	if (m_pWindow) {
+		glfwDestroyWindow(m_pWindow);
+	}
+
 	glfwTerminate();
 }
