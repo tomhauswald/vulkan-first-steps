@@ -46,6 +46,8 @@ struct VulkanContext {
 	std::vector<VkImageView> swapchainImageViews;
 
 	std::unordered_map<std::string, VkShaderModule> shaders;
+	std::vector<VkPipelineShaderStageCreateInfo> pipelineStages;
+	VkPipelineLayout pipelineLayout;
 };
 
 class Renderer {
