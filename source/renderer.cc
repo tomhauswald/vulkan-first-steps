@@ -381,6 +381,27 @@ void createPipeline(VulkanContext& ctx) {
 
 	crash_if(vkCreateRenderPass(ctx.device, &renderPassInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
 
+	ctx.swapchainFramebuffers = mapToVector<
+		decltype(ctx.swapchainImageViews), 
+		VkFramebuffer
+	>(
+		ctx.swapchainImageViews, 
+		[&] (auto const& view) {
+			auto framebufferInfo = VkFramebufferCreateInfo{};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.width = ctx.windowExtent.width;
+			framebufferInfo.height = ctx.windowExtent.height;
+			framebufferInfo.layers = 1;
+			framebufferInfo.attachmentCount = 1;
+			framebufferInfo.pAttachments = &view;
+			framebufferInfo.renderPass = ctx.renderPass;
+
+			VkFramebuffer framebuffer;
+			crash_if(vkCreateFramebuffer(ctx.device, &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS);
+			return framebuffer;
+		}
+	);
+	
 	auto vertexInput = VkPipelineVertexInputStateCreateInfo{};
 	vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInput.vertexAttributeDescriptionCount = 0;
@@ -501,6 +522,10 @@ void Renderer::renderScene(Scene const& scene) const {
 }
 
 void destroyVulkanResources(VulkanContext& ctx) {
+
+	for(auto framebuffer : ctx.swapchainFramebuffers) {
+		vkDestroyFramebuffer(ctx.device, framebuffer, nullptr);
+	}
 
 	vkDestroyPipeline(ctx.device, ctx.pipeline, nullptr);
 	vkDestroyRenderPass(ctx.device, ctx.renderPass, nullptr);
