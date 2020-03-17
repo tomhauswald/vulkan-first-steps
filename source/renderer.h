@@ -45,11 +45,13 @@ struct VulkanContext {
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
 	std::vector<VkFramebuffer> swapchainFramebuffers;
+	std::vector<VkCommandBuffer> swapchainCommandBuffers;
 
 	std::unordered_map<std::string, VkShaderModule> shaders;
 	VkPipelineLayout pipelineLayout;
 	VkRenderPass renderPass;
 	VkPipeline pipeline;
+	VkCommandPool commandPool;
 };
 
 class Renderer {

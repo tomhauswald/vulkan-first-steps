@@ -494,6 +494,50 @@ void createPipeline(VulkanContext& ctx) {
 	crash_if(vkCreateGraphicsPipelines(ctx.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &ctx.pipeline) != VK_SUCCESS);
 }
 
+void createCommandBuffers(VulkanContext& ctx) {
+
+	auto poolInfo = VkCommandPoolCreateInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = QueueRole::Graphics;
+
+	crash_if(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &ctx.commandPool) != VK_SUCCESS);
+
+	auto allocateInfo = VkCommandBufferAllocateInfo{};
+	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocateInfo.commandPool = ctx.commandPool;
+	allocateInfo.commandBufferCount = ctx.swapchainImages.size();
+
+	auto swapchainImageCount = ctx.swapchainImages.size();
+	ctx.swapchainCommandBuffers.resize(swapchainImageCount);
+	crash_if(vkAllocateCommandBuffers(ctx.device, &allocateInfo, ctx.swapchainCommandBuffers.data()) != VK_SUCCESS);
+	
+	auto clearValue = VkClearValue{ .color = { .float32 = { 1.0f, 0.0f, 0.0f, 1.0f } } };
+
+	for(size_t i=0; i<swapchainImageCount; ++i) {
+
+		auto& cmdbuf = ctx.swapchainCommandBuffers[i];
+
+		auto beginInfo = VkCommandBufferBeginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		crash_if(vkBeginCommandBuffer(cmdbuf, &beginInfo) != VK_SUCCESS);
+
+		auto passInfo = VkRenderPassBeginInfo{};
+		passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		passInfo.framebuffer = ctx.swapchainFramebuffers[i];
+		passInfo.clearValueCount = 1;
+		passInfo.pClearValues = &clearValue;
+		passInfo.renderPass = ctx.renderPass;
+		passInfo.renderArea.extent = ctx.windowExtent;
+
+		vkCmdBeginRenderPass(cmdbuf, &passInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx.pipeline);
+		vkCmdDraw(cmdbuf, 3, 1, 0, 0);
+		vkCmdEndRenderPass(cmdbuf);
+
+		crash_if(vkEndCommandBuffer(cmdbuf) != VK_SUCCESS);
+	}
+}
+
 Renderer::Renderer() : m_pWindow(nullptr) {
 
 	// Initialize GLFW.
@@ -506,6 +550,8 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	createDevice(m_vulkanContext);
 	createSwapchain(m_vulkanContext);
 	createPipeline(m_vulkanContext);
+	createCommandBuffers(m_vulkanContext);
+
 	glfwShowWindow(m_pWindow);
 }
 
@@ -522,6 +568,8 @@ void Renderer::renderScene(Scene const& scene) const {
 }
 
 void destroyVulkanResources(VulkanContext& ctx) {
+
+	vkDestroyCommandPool(ctx.device, ctx.commandPool, nullptr);
 
 	for(auto framebuffer : ctx.swapchainFramebuffers) {
 		vkDestroyFramebuffer(ctx.device, framebuffer, nullptr);
