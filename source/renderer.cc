@@ -415,19 +415,59 @@ void createPipelineLayout(VulkanContext& ctx) {
 	crash_if(vkCreatePipelineLayout(ctx.device, &createInfo, nullptr, &ctx.pipelineLayout) != VK_SUCCESS);
 }
 
+void createRenderPass(VulkanContext& ctx) {
+	
+	auto colorAttachments = std::array{
+		VkAttachmentDescription{
+			.format = VK_FORMAT_B8G8R8A8_SRGB,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		}
+	};
+
+	auto colorAttachmentReferences = std::array{
+		VkAttachmentReference{
+			.attachment = 0,
+			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		}
+	};
+
+	auto subpasses = std::array{
+		VkSubpassDescription{		
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.colorAttachmentCount = colorAttachmentReferences.size(),
+			.pColorAttachments = colorAttachmentReferences.data(),
+		}
+	};
+
+	auto createInfo = VkRenderPassCreateInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	createInfo.attachmentCount = colorAttachments.size();
+	createInfo.pAttachments = colorAttachments.data();
+	createInfo.subpassCount = subpasses.size();
+	createInfo.pSubpasses = subpasses.data();
+
+	crash_if(vkCreateRenderPass(ctx.device, &createInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
+}
+
 Renderer::Renderer() : m_pWindow(nullptr) {
 
 	// Initialize GLFW.
 	crash_if(!glfwInit());
 	
 	// Initialize Vulkan.
-	createInstance(m_vkCtx);
-	m_pWindow = createWindow(m_vkCtx, 1280, 720);
-	selectPhysicalDevice(m_vkCtx);
-	createDevice(m_vkCtx);
-	createSwapchain(m_vkCtx);
-	createPipelineLayout(m_vkCtx);
-
+	createInstance(m_vulkanContext);
+	m_pWindow = createWindow(m_vulkanContext, 1280, 720);
+	selectPhysicalDevice(m_vulkanContext);
+	createDevice(m_vulkanContext);
+	createSwapchain(m_vulkanContext);
+	createPipelineLayout(m_vulkanContext);
+	createRenderPass(m_vulkanContext);
 	glfwShowWindow(m_pWindow);
 }
 
@@ -447,21 +487,22 @@ Renderer::~Renderer() {
 
 	// Free Vulkan resources:
 
-	vkDestroyPipelineLayout(m_vkCtx.device, m_vkCtx.pipelineLayout, nullptr);
+	vkDestroyRenderPass(m_vulkanContext.device, m_vulkanContext.renderPass, nullptr);
+	vkDestroyPipelineLayout(m_vulkanContext.device, m_vulkanContext.pipelineLayout, nullptr);
 
-	for(auto [name, shader] : m_vkCtx.shaders) {
-		vkDestroyShaderModule(m_vkCtx.device, shader, nullptr);
+	for(auto [name, shader] : m_vulkanContext.shaders) {
+		vkDestroyShaderModule(m_vulkanContext.device, shader, nullptr);
 	}
 
-	for(auto view : m_vkCtx.swapchainImageViews) {
-		vkDestroyImageView(m_vkCtx.device, view, nullptr);
+	for(auto view : m_vulkanContext.swapchainImageViews) {
+		vkDestroyImageView(m_vulkanContext.device, view, nullptr);
 	}
 
-	vkDestroySwapchainKHR(m_vkCtx.device, m_vkCtx.swapchain, nullptr);
-	vkDestroyDevice(m_vkCtx.device, nullptr);
+	vkDestroySwapchainKHR(m_vulkanContext.device, m_vulkanContext.swapchain, nullptr);
+	vkDestroyDevice(m_vulkanContext.device, nullptr);
 
-	vkDestroySurfaceKHR(m_vkCtx.instance, m_vkCtx.windowSurface, nullptr);
-	vkDestroyInstance(m_vkCtx.instance, nullptr);
+	vkDestroySurfaceKHR(m_vulkanContext.instance, m_vulkanContext.windowSurface, nullptr);
+	vkDestroyInstance(m_vulkanContext.instance, nullptr);
 	
 	// Free GLFW resources:
 

@@ -48,12 +48,13 @@ struct VulkanContext {
 	std::unordered_map<std::string, VkShaderModule> shaders;
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStages;
 	VkPipelineLayout pipelineLayout;
+	VkRenderPass renderPass;
 };
 
 class Renderer {
 private:
 	GLFWwindow* m_pWindow;
-	VulkanContext m_vkCtx;
+	VulkanContext m_vulkanContext;
 
 public:
 	Renderer();
