@@ -2,7 +2,7 @@
 	
 CXX       := clang++-9
 CXX_STD   := gnu++2a
-CXX_FLAGS := -std=$(CXX_STD) -Wall -Werror
+CXX_FLAGS := -std=$(CXX_STD) -MMD -MP -Wall -Wextra -Wpedantic -Werror
 
 ifdef RELEASE
 CXX_FLAGS += -O3 -DNDEBUG
@@ -18,11 +18,13 @@ SOURCES := $(wildcard ../source/*.cc)
 OBJDIR  := ./obj/$(if $(RELEASE),release,debug)
 OBJECTS := $(patsubst ../source/%.cc,$(OBJDIR)/%.o,$(SOURCES))
 
-$(BINARY): $(OBJECTS) $(MAKEFILE_LIST)
+-include $(OBJECTS:.o=.d)
+
+$(BINARY): $(OBJECTS)
 	mkdir -p $(dir $(@))
 	$(LD) -o $(@) $(OBJECTS) $(LD_FLAGS)
 
-$(OBJDIR)/%.o: ../source/%.cc $(MAKEFILE_LIST)
+$(OBJDIR)/%.o: ../source/%.cc
 	mkdir -p $(dir $(@))
 	$(CXX) $(CXX_FLAGS) -o $(@) -c $(<)
 

@@ -1,4 +1,6 @@
 #include "renderer.h"
+#include <fstream>
+#include <sstream>
 
 // Vulkan resource query with internal return code.
 template<typename Resource, typename ... Args>
@@ -38,10 +40,12 @@ constexpr std::array validationLayers{
 
 void createInstance(VulkanContext& ctx) {
 	
-	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
+	VkApplicationInfo appInfo{};
+	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.apiVersion = VK_API_VERSION_1_2;
 
-	VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+	VkInstanceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = &appInfo;
 
 	// Specify validation layers to enable in debug mode.
@@ -55,6 +59,32 @@ void createInstance(VulkanContext& ctx) {
 	createInfo.ppEnabledExtensionNames = extensions;
 
 	crash_if(vkCreateInstance(&createInfo, nullptr, &ctx.instance) != VK_SUCCESS);
+}
+
+GLFWwindow* createWindow(VulkanContext& ctx, uint32_t resX, uint32_t resY) {
+
+	// Create GLFW window.
+	glfwDefaultWindowHints();
+	glfwWindowHint(GLFW_CLIENT_API , GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE  , GLFW_FALSE);
+	glfwWindowHint(GLFW_VISIBLE    , GLFW_FALSE);
+
+	ctx.windowExtent = { resX, resY };
+	auto window = glfwCreateWindow(
+		static_cast<int>(ctx.windowExtent.width),
+		static_cast<int>(ctx.windowExtent.height),
+		"Hello, Vulkan!",
+		nullptr,
+		nullptr
+	);
+
+	// Window creation must succeed.
+	crash_if(!window);
+
+	// Window surface creation must succeed.
+	crash_if(glfwCreateWindowSurface(ctx.instance, window, nullptr, &ctx.windowSurface) != VK_SUCCESS);
+
+	return window;
 }
 
 void selectPhysicalDevice(VulkanContext& ctx) {
@@ -290,30 +320,30 @@ void createSwapchain(VulkanContext& ctx) {
 	);
 }
 
-GLFWwindow* createWindow(VulkanContext& ctx, uint32_t resX, uint32_t resY) {
+VkShaderModule loadShader(VulkanContext const& ctx, std::string const& path) {
+	
+	std::cout << "Loading shader file: " << path << lf;
 
-	// Create GLFW window.
-	glfwDefaultWindowHints();
-	glfwWindowHint(GLFW_CLIENT_API , GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE  , GLFW_FALSE);
-	glfwWindowHint(GLFW_VISIBLE    , GLFW_FALSE);
+	std::ifstream fs(path);
+	std::stringstream ss;
+	ss << fs.rdbuf();
+	auto code = ss.str();
 
-	ctx.windowExtent = { resX, resY };
-	auto window = glfwCreateWindow(
-		static_cast<int>(ctx.windowExtent.width),
-		static_cast<int>(ctx.windowExtent.height),
-		"Hello, Vulkan!",
-		nullptr,
-		nullptr
-	);
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<uint32_t const*>(code.c_str());
 
-	// Window creation must succeed.
-	crash_if(!window);
+	VkShaderModule module;
+	crash_if(vkCreateShaderModule(ctx.device, &createInfo, nullptr, &module) != VK_SUCCESS);
+	return std::move(module);
+}
 
-	// Window surface creation must succeed.
-	crash_if(glfwCreateWindowSurface(ctx.instance, window, nullptr, &ctx.windowSurface) != VK_SUCCESS);
-
-	return window;
+void loadShaders(VulkanContext& ctx) {
+	
+	for(auto name : { "triangle.vert", "triangle.frag" }) {
+		ctx.shaders[name] = loadShader(ctx, "../assets/shaders/"s + name + ".spv"); 
+	}
 }
 
 Renderer::Renderer() : m_pWindow(nullptr) {
@@ -327,6 +357,7 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	selectPhysicalDevice(m_vkCtx);
 	createDevice(m_vkCtx);
 	createSwapchain(m_vkCtx);
+	loadShaders(m_vkCtx);
 
 	glfwShowWindow(m_pWindow);
 }
@@ -340,12 +371,16 @@ void Renderer::handleWindowEvents() {
 }
 
 void Renderer::renderScene(Scene const& scene) const {
-	;
+	(void) scene;
 }
 
 Renderer::~Renderer() {
 
 	// Free Vulkan resources:
+
+	for(auto [name, shader] : m_vkCtx.shaders) {
+		vkDestroyShaderModule(m_vkCtx.device, shader, nullptr);
+	}
 
 	for(auto view : m_vkCtx.swapchainImageViews) {
 		vkDestroyImageView(m_vkCtx.device, view, nullptr);

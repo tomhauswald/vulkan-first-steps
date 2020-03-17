@@ -10,6 +10,7 @@
 
 #include "common.h"
 
+
 struct Scene { };
 
 enum QueueRole {
@@ -43,6 +44,8 @@ struct VulkanContext {
 	VkSwapchainKHR swapchain;
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
+
+	std::unordered_map<std::string, VkShaderModule> shaders;
 };
 
 class Renderer {

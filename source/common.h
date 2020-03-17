@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+using namespace std::string_literals;
+
 constexpr bool debug = 
 #ifdef _DEBUG
 true
