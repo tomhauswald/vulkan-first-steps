@@ -320,7 +320,7 @@ void createSwapchain(VulkanContext& ctx) {
 	);
 }
 
-void loadShader(VulkanContext& ctx, std::string const& name) {
+VkShaderModule& loadShader(VulkanContext& ctx, std::string const& name) {
 	
 	constexpr auto shaderPath = "../assets/shaders/";
 	constexpr auto shaderExt = ".spv";
@@ -339,23 +339,47 @@ void loadShader(VulkanContext& ctx, std::string const& name) {
 	createInfo.pCode = reinterpret_cast<uint32_t const*>(code.c_str());
 
 	crash_if(vkCreateShaderModule(ctx.device, &createInfo, nullptr, &ctx.shaders[name]) != VK_SUCCESS);
+	return ctx.shaders[name];
 }
 
-void createPipelineLayout(VulkanContext& ctx) {
+void createPipeline(VulkanContext& ctx) {
 	
-	auto stage = VkPipelineShaderStageCreateInfo{};
-	stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stage.pName = "main";
+	auto colorAttachments = std::array{
+		VkAttachmentDescription{
+			.format = VK_FORMAT_B8G8R8A8_SRGB,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		}
+	};
 
-	loadShader(ctx, "triangle.vert");
-	stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	stage.module = ctx.shaders["triangle.vert"];
-	ctx.pipelineStages.push_back(stage);
+	auto colorAttachmentReferences = std::array{
+		VkAttachmentReference{
+			.attachment = 0,
+			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		}
+	};
 
-	loadShader(ctx, "triangle.frag");
-	stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	stage.module = ctx.shaders["triangle.frag"];
-	ctx.pipelineStages.push_back(stage);
+	auto subpasses = std::array{
+		VkSubpassDescription{		
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.colorAttachmentCount = colorAttachmentReferences.size(),
+			.pColorAttachments = colorAttachmentReferences.data(),
+		}
+	};
+
+	auto renderPassInfo = VkRenderPassCreateInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = colorAttachments.size();
+	renderPassInfo.pAttachments = colorAttachments.data();
+	renderPassInfo.subpassCount = subpasses.size();
+	renderPassInfo.pSubpasses = subpasses.data();
+
+	crash_if(vkCreateRenderPass(ctx.device, &renderPassInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
 
 	auto vertexInput = VkPipelineVertexInputStateCreateInfo{};
 	vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -371,9 +395,9 @@ void createPipelineLayout(VulkanContext& ctx) {
 
 	auto viewport = VkViewport{};
 	viewport.x = 0.0f;
-	viewport.y = static_cast<float>(ctx.windowExtent.height);
+	viewport.y = 0.0f;
 	viewport.width = static_cast<float>(ctx.windowExtent.width);
-	viewport.height = static_cast<float>(-ctx.windowExtent.height);
+	viewport.height = static_cast<float>(ctx.windowExtent.height);
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
@@ -409,50 +433,44 @@ void createPipelineLayout(VulkanContext& ctx) {
 	blendState.attachmentCount = 1;
 	blendState.pAttachments = &blendAttachmentState;
 
+	auto msaaState = VkPipelineMultisampleStateCreateInfo{};
+	msaaState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	msaaState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	auto stages = std::array{
+		VkPipelineShaderStageCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = loadShader(ctx, "triangle.vert"),
+			.pName = "main",
+		},
+		VkPipelineShaderStageCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = loadShader(ctx, "triangle.frag"),
+			.pName = "main",
+		}
+	}; 
+
 	auto createInfo = VkPipelineLayoutCreateInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	
 	crash_if(vkCreatePipelineLayout(ctx.device, &createInfo, nullptr, &ctx.pipelineLayout) != VK_SUCCESS);
-}
 
-void createRenderPass(VulkanContext& ctx) {
-	
-	auto colorAttachments = std::array{
-		VkAttachmentDescription{
-			.format = VK_FORMAT_B8G8R8A8_SRGB,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-		}
-	};
+	auto pipelineInfo = VkGraphicsPipelineCreateInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.layout = ctx.pipelineLayout;
+	pipelineInfo.renderPass = ctx.renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.stageCount = stages.size();
+	pipelineInfo.pStages = stages.data();
+	pipelineInfo.pVertexInputState = &vertexInput;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterState;
+	pipelineInfo.pColorBlendState = &blendState;
+	pipelineInfo.pMultisampleState = &msaaState;
 
-	auto colorAttachmentReferences = std::array{
-		VkAttachmentReference{
-			.attachment = 0,
-			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-		}
-	};
-
-	auto subpasses = std::array{
-		VkSubpassDescription{		
-			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-			.colorAttachmentCount = colorAttachmentReferences.size(),
-			.pColorAttachments = colorAttachmentReferences.data(),
-		}
-	};
-
-	auto createInfo = VkRenderPassCreateInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	createInfo.attachmentCount = colorAttachments.size();
-	createInfo.pAttachments = colorAttachments.data();
-	createInfo.subpassCount = subpasses.size();
-	createInfo.pSubpasses = subpasses.data();
-
-	crash_if(vkCreateRenderPass(ctx.device, &createInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
+	crash_if(vkCreateGraphicsPipelines(ctx.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &ctx.pipeline) != VK_SUCCESS);
 }
 
 Renderer::Renderer() : m_pWindow(nullptr) {
@@ -466,8 +484,7 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	selectPhysicalDevice(m_vulkanContext);
 	createDevice(m_vulkanContext);
 	createSwapchain(m_vulkanContext);
-	createPipelineLayout(m_vulkanContext);
-	createRenderPass(m_vulkanContext);
+	createPipeline(m_vulkanContext);
 	glfwShowWindow(m_pWindow);
 }
 
@@ -483,31 +500,36 @@ void Renderer::renderScene(Scene const& scene) const {
 	(void) scene;
 }
 
+void destroyVulkanResources(VulkanContext& ctx) {
+
+	vkDestroyPipeline(ctx.device, ctx.pipeline, nullptr);
+	vkDestroyRenderPass(ctx.device, ctx.renderPass, nullptr);
+	vkDestroyPipelineLayout(ctx.device, ctx.pipelineLayout, nullptr);
+
+	for(auto [name, shader] : ctx.shaders) {
+		vkDestroyShaderModule(ctx.device, shader, nullptr);
+	}
+
+	for(auto view : ctx.swapchainImageViews) {
+		vkDestroyImageView(ctx.device, view, nullptr);
+	}
+
+	vkDestroySwapchainKHR(ctx.device, ctx.swapchain, nullptr);
+	vkDestroyDevice(ctx.device, nullptr);
+
+	vkDestroySurfaceKHR(ctx.instance, ctx.windowSurface, nullptr);
+	vkDestroyInstance(ctx.instance, nullptr);
+
+	ctx = {};
+}
+
 Renderer::~Renderer() {
 
-	// Free Vulkan resources:
-
-	vkDestroyRenderPass(m_vulkanContext.device, m_vulkanContext.renderPass, nullptr);
-	vkDestroyPipelineLayout(m_vulkanContext.device, m_vulkanContext.pipelineLayout, nullptr);
-
-	for(auto [name, shader] : m_vulkanContext.shaders) {
-		vkDestroyShaderModule(m_vulkanContext.device, shader, nullptr);
-	}
-
-	for(auto view : m_vulkanContext.swapchainImageViews) {
-		vkDestroyImageView(m_vulkanContext.device, view, nullptr);
-	}
-
-	vkDestroySwapchainKHR(m_vulkanContext.device, m_vulkanContext.swapchain, nullptr);
-	vkDestroyDevice(m_vulkanContext.device, nullptr);
-
-	vkDestroySurfaceKHR(m_vulkanContext.instance, m_vulkanContext.windowSurface, nullptr);
-	vkDestroyInstance(m_vulkanContext.instance, nullptr);
-	
-	// Free GLFW resources:
+	destroyVulkanResources(m_vulkanContext);
 
 	if (m_pWindow) {
 		glfwDestroyWindow(m_pWindow);
+		m_pWindow = nullptr;
 	}
 
 	glfwTerminate();
