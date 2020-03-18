@@ -3,6 +3,6 @@ windows/x64
 *.spv
 linux/bin
 linux/obj
-**/*.db
+*.db
 *.opendb
-**/*.suo
+*.suo
