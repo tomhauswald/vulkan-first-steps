@@ -1,5 +1,8 @@
 windows/x64
-**/*.ipch
-**/*.spv
+.ipch
+.spv
 linux/bin
 linux/obj
+.db
+.opendb
+.suo
