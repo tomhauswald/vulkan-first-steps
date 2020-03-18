@@ -11,11 +11,24 @@
 
 using namespace std::string_literals;
 
+enum class Platform {
+	Windows,
+	Linux
+};
+
 constexpr bool debug = 
 #ifdef _DEBUG
 true
 #else
 false
+#endif
+;
+
+constexpr Platform platform =
+#ifdef _WIN32
+Platform::Windows
+#else
+Platform::Linux
 #endif
 ;
 
@@ -27,7 +40,12 @@ constexpr auto tab = '\t';
 // as well as the textual expression that was checked.
 #define crash_if(Expr) { \
 	if(Expr) { \
-		throw std::runtime_error(std::string{__FILE__ ":"} + std::to_string(__LINE__) + std::string{" '" #Expr "'"}); \
+		std::stringstream message; \
+		message << __FILE__ << ":" << __LINE__ << " '" << #Expr << '\''; \
+		if constexpr(platform == Platform::Windows) { \
+			std::cerr << message.str() << lf; \
+		} \
+		throw std::runtime_error(message.str()); \
 	} \
 }
 

@@ -14,9 +14,15 @@
 struct Scene { };
 
 enum QueueRole {
-	Graphics,
-	Presentation,
-	_Count
+	QUEUE_ROLE_GRAPHICS,
+	QUEUE_ROLE_PRESENTATION,
+	NUM_QUEUE_ROLES
+};
+
+enum RenderEvent {
+	RENDER_EVENT_IMAGE_AVAILABLE,
+	RENDER_EVENT_FRAME_DONE,
+	NUM_RENDER_EVENTS
 };
 
 template<typename V>
@@ -38,8 +44,8 @@ struct VulkanContext {
 	VkExtent2D windowExtent;
 	VkSurfaceKHR windowSurface;
 
-	std::array<uint32_t, QueueRole::_Count> queueFamilyIndices;
-	std::array<VkQueue, QueueRole::_Count> queues;
+	std::array<uint32_t, NUM_QUEUE_ROLES> queueFamilyIndices;
+	std::array<VkQueue,  NUM_QUEUE_ROLES> queues;
 
 	VkSwapchainKHR swapchain;
 	std::vector<VkImage> swapchainImages;
@@ -52,6 +58,7 @@ struct VulkanContext {
 	VkRenderPass renderPass;
 	VkPipeline pipeline;
 	VkCommandPool commandPool;
+	std::array<VkSemaphore, NUM_RENDER_EVENTS> semaphores;
 };
 
 class Renderer {

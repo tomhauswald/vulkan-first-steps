@@ -215,8 +215,8 @@ void selectPhysicalDevice(VulkanContext& ctx) {
 
 		if(isUpgrade) {
 			ctx.physicalDevice = candidate;
-			ctx.queueFamilyIndices[QueueRole::Graphics] = graphicsFamilyIndex;
-			ctx.queueFamilyIndices[QueueRole::Presentation] = presentationFamilyIndex;
+			ctx.queueFamilyIndices[QUEUE_ROLE_GRAPHICS] = graphicsFamilyIndex;
+			ctx.queueFamilyIndices[QUEUE_ROLE_PRESENTATION] = presentationFamilyIndex;
 		}
 	}
 
@@ -252,7 +252,7 @@ void createDevice(VulkanContext& ctx) {
 
 	crash_if(vkCreateDevice(ctx.physicalDevice, &createInfo, nullptr, &ctx.device) != VK_SUCCESS);
 
-	for(auto role : range<QueueRole>(QueueRole::_Count)) {
+	for(auto role : range<QueueRole>(NUM_QUEUE_ROLES)) {
 		vkGetDeviceQueue(ctx.device, ctx.queueFamilyIndices[role], 0, &ctx.queues[role]);
 	}
 }
@@ -288,7 +288,7 @@ void createSwapchain(VulkanContext& ctx) {
 	};
 	auto sameQueue = (uniqueIndices.size() == 1);
 	createInfo.imageSharingMode      = sameQueue ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
-	createInfo.queueFamilyIndexCount = sameQueue ? QueueRole::_Count : 0;
+	createInfo.queueFamilyIndexCount = sameQueue ? NUM_QUEUE_ROLES : 0;
 	createInfo.pQueueFamilyIndices   = sameQueue ? ctx.queueFamilyIndices.data() : nullptr;
 
 	crash_if(vkCreateSwapchainKHR(ctx.device, &createInfo, nullptr, &ctx.swapchain) != VK_SUCCESS);
@@ -322,13 +322,15 @@ void createSwapchain(VulkanContext& ctx) {
 
 VkShaderModule& loadShader(VulkanContext& ctx, std::string const& name) {
 	
-	constexpr auto shaderPath = "../assets/shaders/";
+	constexpr auto shaderBasePath = "../assets/shaders/";
 	constexpr auto shaderExt = ".spv";
 
-	auto path = shaderPath + name + shaderExt;
+	auto path = shaderBasePath + name + shaderExt;
 	std::cout << "Loading shader from path: " << path << lf;
 
-	std::ifstream fs(path);
+	std::ifstream fs(path, std::ios::binary);
+	crash_if(!fs.is_open());
+
 	std::stringstream ss;
 	ss << fs.rdbuf();
 	auto code = ss.str();
@@ -372,12 +374,22 @@ void createPipeline(VulkanContext& ctx) {
 		}
 	};
 
+	auto dependency = VkSubpassDependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
 	auto renderPassInfo = VkRenderPassCreateInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = colorAttachments.size();
 	renderPassInfo.pAttachments = colorAttachments.data();
 	renderPassInfo.subpassCount = subpasses.size();
 	renderPassInfo.pSubpasses = subpasses.data();
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
 
 	crash_if(vkCreateRenderPass(ctx.device, &renderPassInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
 
@@ -498,7 +510,7 @@ void createCommandBuffers(VulkanContext& ctx) {
 
 	auto poolInfo = VkCommandPoolCreateInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = QueueRole::Graphics;
+	poolInfo.queueFamilyIndex = ctx.queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
 
 	crash_if(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &ctx.commandPool) != VK_SUCCESS);
 
@@ -536,6 +548,23 @@ void createCommandBuffers(VulkanContext& ctx) {
 
 		crash_if(vkEndCommandBuffer(cmdbuf) != VK_SUCCESS);
 	}
+
+	auto semaphoreInfo = VkSemaphoreCreateInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	crash_if(vkCreateSemaphore(
+			ctx.device, 
+			&semaphoreInfo, 
+			nullptr, 
+			&ctx.semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
+	) != VK_SUCCESS);
+
+	crash_if(vkCreateSemaphore(
+		ctx.device,
+		&semaphoreInfo,
+		nullptr,
+		&ctx.semaphores[RENDER_EVENT_FRAME_DONE]
+	) != VK_SUCCESS);
 }
 
 Renderer::Renderer() : m_pWindow(nullptr) {
@@ -564,10 +593,60 @@ void Renderer::handleWindowEvents() {
 }
 
 void Renderer::renderScene(Scene const& scene) const {
-	(void) scene;
+
+	(void)scene;
+
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(
+		m_vulkanContext.device,
+		m_vulkanContext.swapchain,
+		UINT64_MAX,
+		m_vulkanContext.semaphores[RENDER_EVENT_IMAGE_AVAILABLE],
+		VK_NULL_HANDLE,
+		&imageIndex
+	);
+
+	auto stage = VkPipelineStageFlags{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	auto submitInfo = VkSubmitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_vulkanContext.swapchainCommandBuffers[imageIndex];
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitDstStageMask = &stage;
+	submitInfo.pWaitSemaphores = &m_vulkanContext.semaphores[RENDER_EVENT_IMAGE_AVAILABLE];
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &m_vulkanContext.semaphores[RENDER_EVENT_FRAME_DONE];
+
+	crash_if(VK_SUCCESS != vkQueueSubmit(
+		m_vulkanContext.queues[QUEUE_ROLE_GRAPHICS], 
+		1, 
+		&submitInfo, 
+		VK_NULL_HANDLE
+	));
+
+	auto presentInfo = VkPresentInfoKHR{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &m_vulkanContext.semaphores[RENDER_EVENT_FRAME_DONE];
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &m_vulkanContext.swapchain;
+	presentInfo.pImageIndices = &imageIndex;
+
+	crash_if(VK_SUCCESS != vkQueuePresentKHR(
+		m_vulkanContext.queues[QUEUE_ROLE_PRESENTATION], 
+		&presentInfo
+	));
+
+	crash_if(VK_SUCCESS != vkQueueWaitIdle(m_vulkanContext.queues[QUEUE_ROLE_PRESENTATION]));
 }
 
 void destroyVulkanResources(VulkanContext& ctx) {
+
+	vkDeviceWaitIdle(ctx.device);
+
+	for (auto semaphore : ctx.semaphores) {
+		vkDestroySemaphore(ctx.device, semaphore, nullptr);
+	}
 
 	vkDestroyCommandPool(ctx.device, ctx.commandPool, nullptr);
 
