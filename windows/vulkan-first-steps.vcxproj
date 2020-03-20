@@ -25,6 +25,7 @@
   <ItemGroup>
     <ClInclude Include="..\source\common.h" />
     <ClInclude Include="..\source\renderer.h" />
+    <ClInclude Include="..\source\vertex_formats.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

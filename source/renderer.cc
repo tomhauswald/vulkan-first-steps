@@ -1,4 +1,6 @@
 #include "renderer.h"
+#include "vertex_formats.h"
+
 #include <fstream>
 #include <sstream>
 
@@ -344,7 +346,8 @@ VkShaderModule& loadShader(VulkanContext& ctx, std::string const& name) {
 	return ctx.shaders[name];
 }
 
-void createPipeline(VulkanContext& ctx) {
+template<typename Vertex>
+void createPipeline(VulkanContext& ctx, std::string const& vertexShaderName, std::string const& fragmentShaderName) {
 	
 	auto colorAttachments = std::array{
 		VkAttachmentDescription{
@@ -416,10 +419,10 @@ void createPipeline(VulkanContext& ctx) {
 	
 	auto vertexInput = VkPipelineVertexInputStateCreateInfo{};
 	vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInput.vertexAttributeDescriptionCount = 0;
-	vertexInput.pVertexAttributeDescriptions = nullptr;
-	vertexInput.vertexBindingDescriptionCount = 0;
-	vertexInput.pVertexBindingDescriptions = nullptr;
+	vertexInput.vertexAttributeDescriptionCount = std::size(Vertex::attributes());
+	vertexInput.pVertexAttributeDescriptions = std::data(Vertex::attributes());
+	vertexInput.vertexBindingDescriptionCount = 1;
+	vertexInput.pVertexBindingDescriptions = std::array{ Vertex::binding() }.data();
 
 	auto inputAssembly = VkPipelineInputAssemblyStateCreateInfo{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -474,13 +477,13 @@ void createPipeline(VulkanContext& ctx) {
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = loadShader(ctx, "triangle.vert"),
+			.module = ctx.shaders[vertexShaderName],
 			.pName = "main",
 		},
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = loadShader(ctx, "triangle.frag"),
+			.module = ctx.shaders[fragmentShaderName],
 			.pName = "main",
 		}
 	}; 
@@ -568,17 +571,26 @@ void createCommandBuffers(VulkanContext& ctx) {
 }
 
 Renderer::Renderer() : m_pWindow(nullptr) {
-
+	
 	// Initialize GLFW.
 	crash_if(!glfwInit());
 	
 	// Initialize Vulkan.
 	createInstance(m_vulkanContext);
-	m_pWindow = createWindow(m_vulkanContext, 1280, 720);
+	m_pWindow = createWindow(m_vulkanContext, 2560, 1440);
 	selectPhysicalDevice(m_vulkanContext);
 	createDevice(m_vulkanContext);
 	createSwapchain(m_vulkanContext);
-	createPipeline(m_vulkanContext);
+
+	// Load shaders.
+	auto const vertexShaderName = "2d-colored.vert";
+	auto const fragmentShaderName = "unshaded.frag"; 
+	
+	for (auto const& name : {vertexShaderName, fragmentShaderName}) {
+		loadShader(m_vulkanContext, name);
+	}
+
+	createPipeline<Vertex2dColored>(m_vulkanContext, vertexShaderName, fragmentShaderName);
 	createCommandBuffers(m_vulkanContext);
 
 	glfwShowWindow(m_pWindow);

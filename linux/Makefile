@@ -2,7 +2,12 @@
 	
 CXX       := clang++-9
 CXX_STD   := gnu++2a
-CXX_FLAGS := -std=$(CXX_STD) -MMD -MP -Wall -Wextra -Wpedantic -Werror -Wno-c99-extensions
+CXX_FLAGS := \
+	-std=$(CXX_STD) \
+	-MMD -MP \
+	-Wall -Wextra -Wpedantic -Werror \
+	-Wpessimizing-move -Wredundant-move \
+	-Wno-c99-extensions
 
 ifdef RELEASE
 CXX_FLAGS += -O3 -DNDEBUG
