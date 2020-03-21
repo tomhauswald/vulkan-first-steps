@@ -1,82 +1,32 @@
 #pragma once
 
-#define GLFW_INCLUDE_VULKAN
-#define GLFW_STATIC
-#include <GLFW/glfw3.h>
-
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-
-#include "common.h"
-
+#include "vulkan_context.h"
+#include "vulkan_draw_call.h"
+#include "view.h"
 
 struct Scene { };
-
-enum QueueRole {
-	QUEUE_ROLE_GRAPHICS,
-	QUEUE_ROLE_PRESENTATION,
-	NUM_QUEUE_ROLES
-};
-
-enum RenderEvent {
-	RENDER_EVENT_IMAGE_AVAILABLE,
-	RENDER_EVENT_FRAME_DONE,
-	NUM_RENDER_EVENTS
-};
-
-template<typename V>
-using PerPhysicalDevice = std::unordered_map<VkPhysicalDevice, V>;
-
-struct VulkanContext {
-
-	VkInstance instance;
-
-	std::vector<VkPhysicalDevice> physicalDevices;
-	VkPhysicalDevice physicalDevice;
-	
-	PerPhysicalDevice<VkPhysicalDeviceProperties>           physicalDeviceProperties;
-	PerPhysicalDevice<VkPhysicalDeviceMemoryProperties>     physicalDeviceMemoryProperties;
-	PerPhysicalDevice<std::vector<VkSurfaceFormatKHR>>      physicalDeviceSurfaceFormats;
-	PerPhysicalDevice<std::vector<VkExtensionProperties>>   physicalDeviceExtensions;
-	PerPhysicalDevice<std::vector<VkQueueFamilyProperties>> physicalDeviceQueueFamilies;
-	
-	VkDevice device;
-
-	VkExtent2D windowExtent;
-	VkSurfaceKHR windowSurface;
-
-	std::array<uint32_t, NUM_QUEUE_ROLES> queueFamilyIndices;
-	std::array<VkQueue,  NUM_QUEUE_ROLES> queues;
-
-	VkSwapchainKHR swapchain;
-
-	std::vector<VkImage>         swapchainImages;
-	std::vector<VkImageView>     swapchainImageViews;
-	std::vector<VkFramebuffer>   swapchainFramebuffers;
-	std::vector<VkCommandBuffer> swapchainCommandBuffers;
-
-	std::unordered_map<std::string, VkShaderModule> shaders;
-
-	VkPipelineLayout pipelineLayout;
-	VkRenderPass renderPass;
-	VkPipeline pipeline;
-	VkCommandPool commandPool;
-
-	std::array<VkSemaphore, NUM_RENDER_EVENTS> semaphores;
-
-	std::unordered_map<VkBuffer, VkDeviceMemory> bufferMemories;
-};
 
 class Renderer {
 private:
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
+	void createWindow(size_t resX, size_t resY);
+	
+	std::unordered_map<std::string, VulkanDrawCall> m_preparedDrawCalls;
 
 public:
 	Renderer();
+
 	bool isWindowOpen() const;
 	void handleWindowEvents();
-	void renderScene(Scene const& scene) const;
+	void renderScene(Scene const& scene);
+
+	template<typename Vertex>
+	void prepareDrawCall(std::string const& name, View<Vertex> vertices) {
+		m_preparedDrawCalls.try_emplace(name, VulkanDrawCall(m_vulkanContext));
+		m_preparedDrawCalls.at(name).setVertices(vertices);
+		m_preparedDrawCalls.at(name).prepare();
+	}
+
 	~Renderer();
 };
