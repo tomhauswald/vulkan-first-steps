@@ -21,11 +21,16 @@
   <ItemGroup>
     <ClCompile Include="..\source\engine.cc" />
     <ClCompile Include="..\source\renderer.cc" />
+    <ClCompile Include="..\source\vulkan_context.cc" />
+    <ClCompile Include="..\source\vulkan_draw_call.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\common.h" />
     <ClInclude Include="..\source\renderer.h" />
     <ClInclude Include="..\source\vertex_formats.h" />
+    <ClInclude Include="..\source\view.h" />
+    <ClInclude Include="..\source\vulkan_context.h" />
+    <ClInclude Include="..\source\vulkan_draw_call.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
