@@ -3,7 +3,7 @@
 
 Renderer::Renderer() : m_pWindow(nullptr) {
 	
-	createWindow(2560, 1440);
+	createWindow(1440, 900);
 
 	m_vulkanContext.createInstance();
 	m_vulkanContext.accomodateWindow(m_pWindow);

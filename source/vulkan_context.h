@@ -164,7 +164,7 @@ public:
 		vertexInput.vertexAttributeDescriptionCount = std::size(Vertex::attributes());
 		vertexInput.pVertexAttributeDescriptions = std::data(Vertex::attributes());
 		vertexInput.vertexBindingDescriptionCount = 1;
-		vertexInput.pVertexBindingDescriptions = std::array{ Vertex::binding() }.data();
+		vertexInput.pVertexBindingDescriptions = std::data({ Vertex::binding() });
 
 		auto inputAssembly = VkPipelineInputAssemblyStateCreateInfo{};
 		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -296,7 +296,7 @@ public:
 		void* raw;
 		crashIf(vkMapMemory(m_device, outMemory, 0, vertexBufferInfo.size, 0, &raw) != VK_SUCCESS);
 		{
-			crashIf(memcpy_s(raw, vertexBufferInfo.size, vertices.items(), vertices.bytes()) != 0);
+			std::memcpy(raw, vertices.items(), vertices.bytes());
 		}
 		vkUnmapMemory(m_device, outMemory);
 
