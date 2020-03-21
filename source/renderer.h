@@ -32,13 +32,15 @@ struct VulkanContext {
 
 	VkInstance instance;
 
-	VkPhysicalDevice physicalDevice;
 	std::vector<VkPhysicalDevice> physicalDevices;
-	PerPhysicalDevice<VkPhysicalDeviceProperties> physicalDeviceProperties;
-	PerPhysicalDevice<std::vector<VkSurfaceFormatKHR>> physicalDeviceSurfaceFormats;
-	PerPhysicalDevice<std::vector<VkExtensionProperties>> physicalDeviceExtensions;
+	VkPhysicalDevice physicalDevice;
+	
+	PerPhysicalDevice<VkPhysicalDeviceProperties>           physicalDeviceProperties;
+	PerPhysicalDevice<VkPhysicalDeviceMemoryProperties>     physicalDeviceMemoryProperties;
+	PerPhysicalDevice<std::vector<VkSurfaceFormatKHR>>      physicalDeviceSurfaceFormats;
+	PerPhysicalDevice<std::vector<VkExtensionProperties>>   physicalDeviceExtensions;
 	PerPhysicalDevice<std::vector<VkQueueFamilyProperties>> physicalDeviceQueueFamilies;
-
+	
 	VkDevice device;
 
 	VkExtent2D windowExtent;
@@ -48,17 +50,22 @@ struct VulkanContext {
 	std::array<VkQueue,  NUM_QUEUE_ROLES> queues;
 
 	VkSwapchainKHR swapchain;
-	std::vector<VkImage> swapchainImages;
-	std::vector<VkImageView> swapchainImageViews;
-	std::vector<VkFramebuffer> swapchainFramebuffers;
+
+	std::vector<VkImage>         swapchainImages;
+	std::vector<VkImageView>     swapchainImageViews;
+	std::vector<VkFramebuffer>   swapchainFramebuffers;
 	std::vector<VkCommandBuffer> swapchainCommandBuffers;
 
 	std::unordered_map<std::string, VkShaderModule> shaders;
+
 	VkPipelineLayout pipelineLayout;
 	VkRenderPass renderPass;
 	VkPipeline pipeline;
 	VkCommandPool commandPool;
+
 	std::array<VkSemaphore, NUM_RENDER_EVENTS> semaphores;
+
+	std::unordered_map<VkBuffer, VkDeviceMemory> bufferMemories;
 };
 
 class Renderer {

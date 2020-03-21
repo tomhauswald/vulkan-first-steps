@@ -12,7 +12,7 @@ std::vector<Resource> queryVulkanResources(
 ) {
 	uint32_t count;
 	std::vector<Resource> items;
-	crash_if(func(args..., &count, nullptr) != VK_SUCCESS);
+	crashIf(func(args..., &count, nullptr) != VK_SUCCESS);
 	items.resize(static_cast<size_t>(count));
 	func(args..., &count, items.data());
 	return std::move(items);
@@ -60,7 +60,7 @@ void createInstance(VulkanContext& ctx) {
 	createInfo.enabledExtensionCount = extensionCount;
 	createInfo.ppEnabledExtensionNames = extensions;
 
-	crash_if(vkCreateInstance(&createInfo, nullptr, &ctx.instance) != VK_SUCCESS);
+	crashIf(vkCreateInstance(&createInfo, nullptr, &ctx.instance) != VK_SUCCESS);
 }
 
 GLFWwindow* createWindow(VulkanContext& ctx, uint32_t resX, uint32_t resY) {
@@ -81,10 +81,10 @@ GLFWwindow* createWindow(VulkanContext& ctx, uint32_t resX, uint32_t resY) {
 	);
 
 	// Window creation must succeed.
-	crash_if(!window);
+	crashIf(!window);
 
 	// Window surface creation must succeed.
-	crash_if(glfwCreateWindowSurface(ctx.instance, window, nullptr, &ctx.windowSurface) != VK_SUCCESS);
+	crashIf(glfwCreateWindowSurface(ctx.instance, window, nullptr, &ctx.windowSurface) != VK_SUCCESS);
 
 	return window;
 }
@@ -101,6 +101,8 @@ void selectPhysicalDevice(VulkanContext& ctx) {
 
 		vkGetPhysicalDeviceProperties(candidate, &ctx.physicalDeviceProperties[candidate]);
 		auto const& props = ctx.physicalDeviceProperties[candidate];
+
+		vkGetPhysicalDeviceMemoryProperties(candidate, &ctx.physicalDeviceMemoryProperties[candidate]);
 
 		ctx.physicalDeviceExtensions[candidate] = queryVulkanResources<
 			VkExtensionProperties, 
@@ -222,7 +224,7 @@ void selectPhysicalDevice(VulkanContext& ctx) {
 		}
 	}
 
-	crash_if(!ctx.physicalDevice);
+	crashIf(!ctx.physicalDevice);
 }
 
 void createDevice(VulkanContext& ctx) {
@@ -252,7 +254,7 @@ void createDevice(VulkanContext& ctx) {
 	createInfo.enabledExtensionCount = requiredDeviceExtensions.size();
 	createInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
 
-	crash_if(vkCreateDevice(ctx.physicalDevice, &createInfo, nullptr, &ctx.device) != VK_SUCCESS);
+	crashIf(vkCreateDevice(ctx.physicalDevice, &createInfo, nullptr, &ctx.device) != VK_SUCCESS);
 
 	for(auto role : range<QueueRole>(NUM_QUEUE_ROLES)) {
 		vkGetDeviceQueue(ctx.device, ctx.queueFamilyIndices[role], 0, &ctx.queues[role]);
@@ -293,7 +295,7 @@ void createSwapchain(VulkanContext& ctx) {
 	createInfo.queueFamilyIndexCount = sameQueue ? NUM_QUEUE_ROLES : 0;
 	createInfo.pQueueFamilyIndices   = sameQueue ? ctx.queueFamilyIndices.data() : nullptr;
 
-	crash_if(vkCreateSwapchainKHR(ctx.device, &createInfo, nullptr, &ctx.swapchain) != VK_SUCCESS);
+	crashIf(vkCreateSwapchainKHR(ctx.device, &createInfo, nullptr, &ctx.swapchain) != VK_SUCCESS);
 
 	ctx.swapchainImages = queryVulkanResources<VkImage, VkDevice, VkSwapchainKHR>(
 		&vkGetSwapchainImagesKHR,
@@ -316,13 +318,13 @@ void createSwapchain(VulkanContext& ctx) {
 			srr.layerCount = 1;
 
 			VkImageView view;
-			crash_if(vkCreateImageView(ctx.device, &createInfo, nullptr, &view) != VK_SUCCESS);
+			crashIf(vkCreateImageView(ctx.device, &createInfo, nullptr, &view) != VK_SUCCESS);
 			return std::move(view);
 		}
 	);
 }
 
-VkShaderModule& loadShader(VulkanContext& ctx, std::string const& name) {
+VkShaderModule const& loadShader(VulkanContext& ctx, std::string const& name) {
 	
 	constexpr auto shaderBasePath = "../assets/shaders/";
 	constexpr auto shaderExt = ".spv";
@@ -331,7 +333,7 @@ VkShaderModule& loadShader(VulkanContext& ctx, std::string const& name) {
 	std::cout << "Loading shader from path: " << path << lf;
 
 	std::ifstream fs(path, std::ios::binary);
-	crash_if(!fs.is_open());
+	crashIf(!fs.is_open());
 
 	std::stringstream ss;
 	ss << fs.rdbuf();
@@ -342,8 +344,9 @@ VkShaderModule& loadShader(VulkanContext& ctx, std::string const& name) {
 	createInfo.codeSize = code.size();
 	createInfo.pCode = reinterpret_cast<uint32_t const*>(code.c_str());
 
-	crash_if(vkCreateShaderModule(ctx.device, &createInfo, nullptr, &ctx.shaders[name]) != VK_SUCCESS);
-	return ctx.shaders[name];
+	crashIf(vkCreateShaderModule(ctx.device, &createInfo, nullptr, &ctx.shaders[name]) != VK_SUCCESS);
+
+	return ctx.shaders.at(name);
 }
 
 template<typename Vertex>
@@ -394,7 +397,7 @@ void createPipeline(VulkanContext& ctx, std::string const& vertexShaderName, std
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
 
-	crash_if(vkCreateRenderPass(ctx.device, &renderPassInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
+	crashIf(vkCreateRenderPass(ctx.device, &renderPassInfo, nullptr, &ctx.renderPass) != VK_SUCCESS);
 
 	ctx.swapchainFramebuffers = mapToVector<
 		decltype(ctx.swapchainImageViews), 
@@ -412,7 +415,7 @@ void createPipeline(VulkanContext& ctx, std::string const& vertexShaderName, std
 			framebufferInfo.renderPass = ctx.renderPass;
 
 			VkFramebuffer framebuffer;
-			crash_if(vkCreateFramebuffer(ctx.device, &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS);
+			crashIf(vkCreateFramebuffer(ctx.device, &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS);
 			return framebuffer;
 		}
 	);
@@ -490,7 +493,7 @@ void createPipeline(VulkanContext& ctx, std::string const& vertexShaderName, std
 
 	auto createInfo = VkPipelineLayoutCreateInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	crash_if(vkCreatePipelineLayout(ctx.device, &createInfo, nullptr, &ctx.pipelineLayout) != VK_SUCCESS);
+	crashIf(vkCreatePipelineLayout(ctx.device, &createInfo, nullptr, &ctx.pipelineLayout) != VK_SUCCESS);
 
 	auto pipelineInfo = VkGraphicsPipelineCreateInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -506,7 +509,62 @@ void createPipeline(VulkanContext& ctx, std::string const& vertexShaderName, std
 	pipelineInfo.pColorBlendState = &blendState;
 	pipelineInfo.pMultisampleState = &msaaState;
 
-	crash_if(vkCreateGraphicsPipelines(ctx.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &ctx.pipeline) != VK_SUCCESS);
+	crashIf(vkCreateGraphicsPipelines(ctx.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &ctx.pipeline) != VK_SUCCESS);
+}
+
+template<typename Vertex>
+VkBuffer createVertexBuffer(VulkanContext& ctx, View<Vertex> vertices) {
+
+	auto vertexBufferInfo = VkBufferCreateInfo{};
+	vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	vertexBufferInfo.queueFamilyIndexCount = 1;
+	vertexBufferInfo.pQueueFamilyIndices = &ctx.queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
+	vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	vertexBufferInfo.size = static_cast<VkDeviceSize>(vertices.bytes());
+
+	auto vertexBuffer = VkBuffer{};
+	vkCreateBuffer(ctx.device, &vertexBufferInfo, nullptr, &vertexBuffer);
+
+	auto memReqmt = VkMemoryRequirements{};
+	vkGetBufferMemoryRequirements(ctx.device, vertexBuffer, &memReqmt);
+	
+	auto memReqProps = VkMemoryPropertyFlags{ 
+		  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT 
+	};
+
+	auto allocInfo = VkMemoryAllocateInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memReqmt.size;
+	allocInfo.memoryTypeIndex = -1;
+
+	// Find suitable memory type.
+	auto const& devMemProps = ctx.physicalDeviceMemoryProperties.at(ctx.physicalDevice);
+	for (uint32_t i = 0; i < devMemProps.memoryTypeCount; ++i) {
+		
+		if (!nthBitHi(memReqmt.memoryTypeBits, i)) continue; // Skip types according to mask.
+		
+		else if (devMemProps.memoryTypes[i].propertyFlags & memReqProps) {
+			allocInfo.memoryTypeIndex = i;
+			break;
+		}
+	}
+
+	auto vertexBufferMemory = VkDeviceMemory{};
+	crashIf(vkAllocateMemory(ctx.device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS);
+	crashIf(vkBindBufferMemory(ctx.device, vertexBuffer, vertexBufferMemory, 0) != VK_SUCCESS);
+
+	ctx.bufferMemories[vertexBuffer] = vertexBufferMemory;
+
+	void* raw;
+	crashIf(vkMapMemory(ctx.device, vertexBufferMemory, 0, vertexBufferInfo.size, 0, &raw) != VK_SUCCESS);
+	{
+		crashIf(memcpy_s(raw, vertexBufferInfo.size, vertices.items(), vertices.bytes()) != 0);
+	}
+	vkUnmapMemory(ctx.device, vertexBufferMemory);
+
+	return vertexBuffer;
 }
 
 void createCommandBuffers(VulkanContext& ctx) {
@@ -515,7 +573,7 @@ void createCommandBuffers(VulkanContext& ctx) {
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = ctx.queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
 
-	crash_if(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &ctx.commandPool) != VK_SUCCESS);
+	crashIf(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &ctx.commandPool) != VK_SUCCESS);
 
 	auto allocateInfo = VkCommandBufferAllocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -524,45 +582,60 @@ void createCommandBuffers(VulkanContext& ctx) {
 
 	auto swapchainImageCount = ctx.swapchainImages.size();
 	ctx.swapchainCommandBuffers.resize(swapchainImageCount);
-	crash_if(vkAllocateCommandBuffers(ctx.device, &allocateInfo, ctx.swapchainCommandBuffers.data()) != VK_SUCCESS);
+	crashIf(vkAllocateCommandBuffers(ctx.device, &allocateInfo, ctx.swapchainCommandBuffers.data()) != VK_SUCCESS);
 	
 	auto clearValue = VkClearValue{ .color = { .float32 = { 1.0f, 0.0f, 0.0f, 1.0f } } };
+
+	auto vertices = std::array{
+		Vertex2dColored{ {+0.0f, -0.5f}, {1.0f, 0.0f, 0.0f} },
+		Vertex2dColored{ {+0.5f, +0.5f}, {0.0f, 1.0f, 0.0f} },
+		Vertex2dColored{ {-0.5f, +0.5f}, {0.0f, 0.0f, 1.0f} },
+	};
+
+	auto vertexBuffer = createVertexBuffer(ctx, makeContainerView(vertices));
 
 	for(size_t i=0; i<swapchainImageCount; ++i) {
 
 		auto& cmdbuf = ctx.swapchainCommandBuffers[i];
 
-		auto beginInfo = VkCommandBufferBeginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		crash_if(vkBeginCommandBuffer(cmdbuf, &beginInfo) != VK_SUCCESS);
+		auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
+		cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		auto passInfo = VkRenderPassBeginInfo{};
-		passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		passInfo.framebuffer = ctx.swapchainFramebuffers[i];
-		passInfo.clearValueCount = 1;
-		passInfo.pClearValues = &clearValue;
-		passInfo.renderPass = ctx.renderPass;
-		passInfo.renderArea.extent = ctx.windowExtent;
+		crashIf(vkBeginCommandBuffer(cmdbuf, &cmdbufBeginInfo) != VK_SUCCESS);
+		{
+			auto passBeginInfo = VkRenderPassBeginInfo{};
+			passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			passBeginInfo.framebuffer = ctx.swapchainFramebuffers[i];
+			passBeginInfo.clearValueCount = 1;
+			passBeginInfo.pClearValues = &clearValue;
+			passBeginInfo.renderPass = ctx.renderPass;
+			passBeginInfo.renderArea.extent = ctx.windowExtent;
 
-		vkCmdBeginRenderPass(cmdbuf, &passInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx.pipeline);
-		vkCmdDraw(cmdbuf, 3, 1, 0, 0);
-		vkCmdEndRenderPass(cmdbuf);
+			vkCmdBeginRenderPass(cmdbuf, &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			{
+				vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx.pipeline);
 
-		crash_if(vkEndCommandBuffer(cmdbuf) != VK_SUCCESS);
+				auto const offsetZero = VkDeviceSize{};
+				vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertexBuffer, &offsetZero);
+
+				vkCmdDraw(cmdbuf, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+			}
+			vkCmdEndRenderPass(cmdbuf);
+		}
+		crashIf(vkEndCommandBuffer(cmdbuf) != VK_SUCCESS);
 	}
 
 	auto semaphoreInfo = VkSemaphoreCreateInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	crash_if(vkCreateSemaphore(
+	crashIf(vkCreateSemaphore(
 			ctx.device, 
 			&semaphoreInfo, 
 			nullptr, 
 			&ctx.semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
 	) != VK_SUCCESS);
 
-	crash_if(vkCreateSemaphore(
+	crashIf(vkCreateSemaphore(
 		ctx.device,
 		&semaphoreInfo,
 		nullptr,
@@ -573,7 +646,7 @@ void createCommandBuffers(VulkanContext& ctx) {
 Renderer::Renderer() : m_pWindow(nullptr) {
 	
 	// Initialize GLFW.
-	crash_if(!glfwInit());
+	crashIf(!glfwInit());
 	
 	// Initialize Vulkan.
 	createInstance(m_vulkanContext);
@@ -629,7 +702,7 @@ void Renderer::renderScene(Scene const& scene) const {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &m_vulkanContext.semaphores[RENDER_EVENT_FRAME_DONE];
 
-	crash_if(VK_SUCCESS != vkQueueSubmit(
+	crashIf(VK_SUCCESS != vkQueueSubmit(
 		m_vulkanContext.queues[QUEUE_ROLE_GRAPHICS], 
 		1, 
 		&submitInfo, 
@@ -644,17 +717,22 @@ void Renderer::renderScene(Scene const& scene) const {
 	presentInfo.pSwapchains = &m_vulkanContext.swapchain;
 	presentInfo.pImageIndices = &imageIndex;
 
-	crash_if(VK_SUCCESS != vkQueuePresentKHR(
+	crashIf(VK_SUCCESS != vkQueuePresentKHR(
 		m_vulkanContext.queues[QUEUE_ROLE_PRESENTATION], 
 		&presentInfo
 	));
 
-	crash_if(VK_SUCCESS != vkQueueWaitIdle(m_vulkanContext.queues[QUEUE_ROLE_PRESENTATION]));
+	crashIf(VK_SUCCESS != vkQueueWaitIdle(m_vulkanContext.queues[QUEUE_ROLE_PRESENTATION]));
 }
 
 void destroyVulkanResources(VulkanContext& ctx) {
 
 	vkDeviceWaitIdle(ctx.device);
+
+	for (auto [buffer, memory] : ctx.bufferMemories) {
+		vkDestroyBuffer(ctx.device, buffer, nullptr);
+		vkFreeMemory(ctx.device, memory, nullptr);
+	}
 
 	for (auto semaphore : ctx.semaphores) {
 		vkDestroySemaphore(ctx.device, semaphore, nullptr);
