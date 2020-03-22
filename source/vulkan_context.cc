@@ -501,6 +501,201 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
 	return { buf, mem };
 }
 
+void VulkanContext::createPipeline(
+	std::string const& vertexShaderName, 
+	std::string const& fragmentShaderName, 
+	VkVertexInputBindingDescription const& binding, 
+	View<VkVertexInputAttributeDescription> const& attributes
+) {
+	auto colorAttachments = std::array{
+		VkAttachmentDescription{
+			.format = VK_FORMAT_B8G8R8A8_SRGB,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		}
+	};
+
+	auto colorAttachmentReferences = std::array{
+		VkAttachmentReference{
+			.attachment = 0,
+			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		}
+	};
+
+	auto subpasses = std::array{
+		VkSubpassDescription{
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.colorAttachmentCount = colorAttachmentReferences.size(),
+			.pColorAttachments = colorAttachmentReferences.data(),
+		}
+	};
+
+	auto dependency = VkSubpassDependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	auto renderPassInfo = VkRenderPassCreateInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = colorAttachments.size();
+	renderPassInfo.pAttachments = colorAttachments.data();
+	renderPassInfo.subpassCount = subpasses.size();
+	renderPassInfo.pSubpasses = subpasses.data();
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
+	crashIf(VK_SUCCESS != vkCreateRenderPass(
+		m_device,
+		&renderPassInfo,
+		nullptr,
+		&m_renderPass
+	));
+
+	m_swapchainFramebuffers = mapToVector<
+		decltype(m_swapchainImageViews),
+		VkFramebuffer
+	>(
+		m_swapchainImageViews,
+		[&](auto const& view) {
+			auto framebufferInfo = VkFramebufferCreateInfo{};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.width = m_windowExtent.width;
+			framebufferInfo.height = m_windowExtent.height;
+			framebufferInfo.layers = 1;
+			framebufferInfo.attachmentCount = 1;
+			framebufferInfo.pAttachments = &view;
+			framebufferInfo.renderPass = m_renderPass;
+
+			VkFramebuffer framebuffer;
+			crashIf(VK_SUCCESS != vkCreateFramebuffer(
+				m_device,
+				&framebufferInfo,
+				nullptr,
+				&framebuffer
+			));
+			return framebuffer;
+		}
+	);
+
+	auto vertexInput = VkPipelineVertexInputStateCreateInfo{};
+	vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInput.vertexAttributeDescriptionCount = attributes.count();
+	vertexInput.pVertexAttributeDescriptions = attributes.items();
+	vertexInput.vertexBindingDescriptionCount = 1;
+	vertexInput.pVertexBindingDescriptions = &binding;
+
+	auto inputAssembly = VkPipelineInputAssemblyStateCreateInfo{};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+	auto viewport = VkViewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(m_windowExtent.width);
+	viewport.height = static_cast<float>(m_windowExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	auto scissor = VkRect2D{};
+	scissor.extent = m_windowExtent;
+
+	auto viewportState = VkPipelineViewportStateCreateInfo{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
+
+	auto rasterState = VkPipelineRasterizationStateCreateInfo{};
+	rasterState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterState.lineWidth = 1.0f;
+	rasterState.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterState.polygonMode = VK_POLYGON_MODE_FILL;
+
+	auto blendAttachmentState = VkPipelineColorBlendAttachmentState{};
+	blendAttachmentState.blendEnable = VK_TRUE;
+	blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+	blendAttachmentState.colorWriteMask = 0b1111;
+	blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+	blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+	auto blendState = VkPipelineColorBlendStateCreateInfo{};
+	blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	blendState.attachmentCount = 1;
+	blendState.pAttachments = &blendAttachmentState;
+
+	auto msaaState = VkPipelineMultisampleStateCreateInfo{};
+	msaaState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	msaaState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	auto stages = std::array{
+		VkPipelineShaderStageCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = m_shaders[vertexShaderName],
+			.pName = "main",
+		},
+		VkPipelineShaderStageCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = m_shaders[fragmentShaderName],
+			.pName = "main",
+		}
+	};
+
+	auto createInfo = VkPipelineLayoutCreateInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	crashIf(vkCreatePipelineLayout(m_device, &createInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS);
+
+	auto pipelineInfo = VkGraphicsPipelineCreateInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.layout = m_pipelineLayout;
+	pipelineInfo.renderPass = m_renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.stageCount = stages.size();
+	pipelineInfo.pStages = stages.data();
+	pipelineInfo.pVertexInputState = &vertexInput;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterState;
+	pipelineInfo.pColorBlendState = &blendState;
+	pipelineInfo.pMultisampleState = &msaaState;
+
+	crashIf(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS);
+
+	m_clearCommandBuffers = recordClearCommands({ 1.0f, 0.0f, 0.0f });
+
+	auto semaphoreInfo = VkSemaphoreCreateInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	crashIf(vkCreateSemaphore(
+		m_device,
+		&semaphoreInfo,
+		nullptr,
+		&m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
+	) != VK_SUCCESS);
+
+	crashIf(vkCreateSemaphore(
+		m_device,
+		&semaphoreInfo,
+		nullptr,
+		&m_semaphores[RENDER_EVENT_FRAME_DONE]
+	) != VK_SUCCESS);
+}
+
 void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
 
 	auto cmdbufs = std::vector<VkCommandBuffer>(calls.size() + 1);
