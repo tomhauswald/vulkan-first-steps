@@ -12,13 +12,12 @@ public:
 		return *this;
 	}
 
-	int run() {
+	void run() {
 		m_renderer.initialize();
 		while (m_renderer.isWindowOpen()) {
 			m_renderer.renderScene({});
 			m_renderer.handleWindowEvents();
 		}
-		return 0;
 	}
 };
 
@@ -32,5 +31,6 @@ int main() {
 	}).run();
 
 	std::cout << "Press [ENTER] exit application..." << lf;
-	return getchar();
+	getchar();
+	return 0;
 }

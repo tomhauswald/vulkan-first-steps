@@ -82,7 +82,7 @@ public:
 	void createSwapchain(bool vsync);
 	
 	std::vector<VkCommandBuffer> recordCommands(
-		std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
+		std::function<void(VkCommandBuffer)> const& vkCmdLambda
 	);
 
 	std::vector<VkCommandBuffer> recordClearCommands(

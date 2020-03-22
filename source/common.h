@@ -5,6 +5,7 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -105,5 +106,9 @@ std::vector<Elem> range(size_t count) {
 
 template<typename Container>
 size_t uniqueElemCount(Container const& container) {
-	return std::set(std::begin(container), std::end(container)).size();
+	auto unique = std::set<typename Container::value_type>(
+		std::begin(container), 
+		std::end(container)
+	);
+	return unique.size();
 }

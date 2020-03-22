@@ -15,11 +15,7 @@ void VulkanDrawCall::prepare() {
 }
 
 VulkanDrawCall::~VulkanDrawCall() {
-
-	crashIf(VK_SUCCESS != vkDeviceWaitIdle(m_vulkanContext.device()));
-
 	auto [buf, mem] = m_bufferInfo;
-
 	vkDestroyBuffer(m_vulkanContext.device(), buf, nullptr);
 	vkFreeMemory(m_vulkanContext.device(), mem, nullptr);
 }

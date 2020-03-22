@@ -350,7 +350,7 @@ void VulkanContext::accomodateWindow(GLFWwindow* window) {
 }
 
 std::vector<VkCommandBuffer> VulkanContext::recordCommands(
-	std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
+	std::function<void(VkCommandBuffer)> const& vkCmdLambda
 ) {
 	auto allocateInfo = VkCommandBufferAllocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -381,7 +381,7 @@ std::vector<VkCommandBuffer> VulkanContext::recordCommands(
 			vkCmdBeginRenderPass(cmdbufs[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
 				vkCmdBindPipeline(cmdbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-				vkCmdLambda(cmdbufs[i], i);
+				vkCmdLambda(cmdbufs[i]);
 			}
 			vkCmdEndRenderPass(cmdbufs[i]);
 		}
@@ -403,7 +403,7 @@ std::vector<VkCommandBuffer> VulkanContext::recordClearCommands(glm::vec3 const&
 	clearRect.layerCount = 1;
 	clearRect.rect.extent = m_windowExtent;
 
-	return recordCommands([&](VkCommandBuffer cmdbuf, size_t i) {
+	return recordCommands([&](VkCommandBuffer cmdbuf) {
 		vkCmdClearAttachments(
 			cmdbuf,
 			1,
@@ -418,7 +418,7 @@ std::vector<VkCommandBuffer> VulkanContext::recordDrawCommands(
 	VkBuffer vertexBuffer, 
 	size_t vertexCount
 ) {
-	return recordCommands([&](VkCommandBuffer cmdbuf, size_t i) {
+	return recordCommands([&](VkCommandBuffer cmdbuf) {
 		auto const offsetZero = VkDeviceSize{};
 		vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertexBuffer, &offsetZero);
 		vkCmdDraw(cmdbuf, static_cast<uint32_t>(vertexCount), 1, 0, 0);
@@ -724,8 +724,6 @@ void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
 }
 
 VulkanContext::~VulkanContext() {
-
-	crashIf(VK_SUCCESS != vkDeviceWaitIdle(m_device));
 
 	for (auto semaphore : m_semaphores) {
 		vkDestroySemaphore(m_device, semaphore, nullptr);
