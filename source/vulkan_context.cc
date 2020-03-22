@@ -501,11 +501,107 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
 	return { buf, mem };
 }
 
+std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createUniformBuffer(size_t bytes) {
+	return createBuffer(
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		bytes
+	);
+}
+
+void VulkanContext::writeToBuffer(
+	VkDeviceMemory& mem,
+	void const* data,
+	size_t bytes,
+	size_t offset
+) {
+	// Map cpu-accessible buffer into RAM.
+	void* raw;
+	crashIf(VK_SUCCESS != vkMapMemory(
+		m_device,
+		mem,
+		static_cast<VkDeviceSize>(offset),
+		static_cast<VkDeviceSize>(bytes),
+		0,
+		&raw
+	));
+
+	// Fill memory-mapped buffer.
+	std::memcpy(raw, data, bytes);
+	vkUnmapMemory(m_device, mem);
+}
+
+std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::uploadToDevice(
+	std::tuple<VkBuffer, VkDeviceMemory>& host,
+	VkBufferUsageFlagBits bufferTypeFlag,
+	size_t bytes
+){
+	// Create GPU-local buffer.
+	auto [gpuBuf, gpuMem] = createBuffer(
+		bufferTypeFlag | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		bytes
+	);
+
+	// Schedule transfer from CPU to GPU.
+
+	auto allocInfo = VkCommandBufferAllocateInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandPool = m_commandPool;
+	allocInfo.commandBufferCount = 1;
+
+	VkCommandBuffer xferCmd;
+	crashIf(VK_SUCCESS != vkAllocateCommandBuffers(
+		m_device, 
+		&allocInfo, 
+		&xferCmd
+	));
+
+	auto beginInfo = VkCommandBufferBeginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	crashIf(VK_SUCCESS != vkBeginCommandBuffer(xferCmd, &beginInfo));
+	{
+		auto region = VkBufferCopy{};
+		region.size = bytes;
+		vkCmdCopyBuffer(xferCmd, std::get<0>(host), gpuBuf, 1, &region);
+	}
+	crashIf(VK_SUCCESS != vkEndCommandBuffer(xferCmd));
+
+	// Perform transfer command.
+
+	auto submitInfo = VkSubmitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &xferCmd;
+
+	crashIf(VK_SUCCESS != vkQueueSubmit(
+		m_queues[QUEUE_ROLE_GRAPHICS],
+		1,
+		&submitInfo,
+		VK_NULL_HANDLE
+	));
+
+	// Wait for completion.
+	crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_GRAPHICS]));
+
+	// Release CPU-accessible resources.
+	vkDestroyBuffer(m_device, std::get<0>(host), nullptr);
+	vkFreeMemory(m_device, std::get<1>(host), nullptr);
+
+	host = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+	return { gpuBuf, gpuMem };
+}
+
 void VulkanContext::createPipeline(
 	std::string const& vertexShaderName, 
 	std::string const& fragmentShaderName, 
 	VkVertexInputBindingDescription const& binding, 
-	std::vector<VkVertexInputAttributeDescription> const& attributes
+	std::vector<VkVertexInputAttributeDescription> const& attributes,
+	size_t uniformBytes
 ) {
 	auto colorAttachments = std::array{
 		VkAttachmentDescription{
@@ -597,6 +693,24 @@ void VulkanContext::createPipeline(
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
+	auto setLayoutBinding = VkDescriptorSetLayoutBinding{};
+	setLayoutBinding.binding = 0;
+	setLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	setLayoutBinding.descriptorCount = 1;
+	setLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{};
+	setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	setLayoutInfo.bindingCount = 1;
+	setLayoutInfo.pBindings = &setLayoutBinding;
+
+	if (VK_SUCCESS != vkCreateDescriptorSetLayout(
+		m_device,
+		&setLayoutInfo,
+		nullptr,
+		&m_setLayout
+	));
+
 	auto viewport = VkViewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
@@ -656,10 +770,18 @@ void VulkanContext::createPipeline(
 		}
 	};
 
-	auto createInfo = VkPipelineLayoutCreateInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	crashIf(vkCreatePipelineLayout(m_device, &createInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS);
+	auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &m_setLayout;
 
+	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
+		m_device, 
+		&pipelineLayoutInfo,
+		nullptr,
+		&m_pipelineLayout
+	));
+	
 	auto pipelineInfo = VkGraphicsPipelineCreateInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.layout = m_pipelineLayout;
@@ -674,26 +796,38 @@ void VulkanContext::createPipeline(
 	pipelineInfo.pColorBlendState = &blendState;
 	pipelineInfo.pMultisampleState = &msaaState;
 
-	crashIf(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS);
+	crashIf(VK_SUCCESS != vkCreateGraphicsPipelines(
+		m_device, 
+		VK_NULL_HANDLE, 
+		1, 
+		&pipelineInfo,
+		nullptr, 
+		&m_pipeline
+	));
 
-	m_clearCommandBuffers = recordClearCommands({ 1.0f, 0.0f, 0.0f });
+	m_uniformBuffers.resize(m_swapchainImages.size());
+	for (auto i : range(m_uniformBuffers.size())) {
+		m_uniformBuffers[i] = createUniformBuffer(uniformBytes);
+	}
+
+	m_clearCommandBuffers = recordClearCommands({ 0.39f, 0.58f, 0.93f });
 
 	auto semaphoreInfo = VkSemaphoreCreateInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	crashIf(vkCreateSemaphore(
+	crashIf(VK_SUCCESS != vkCreateSemaphore(
 		m_device,
 		&semaphoreInfo,
 		nullptr,
 		&m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
-	) != VK_SUCCESS);
+	));
 
-	crashIf(vkCreateSemaphore(
+	crashIf(VK_SUCCESS != vkCreateSemaphore(
 		m_device,
 		&semaphoreInfo,
 		nullptr,
 		&m_semaphores[RENDER_EVENT_FRAME_DONE]
-	) != VK_SUCCESS);
+	));
 }
 
 void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
@@ -735,6 +869,12 @@ VulkanContext::~VulkanContext() {
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
+	for (auto [buf, mem] : m_uniformBuffers) {
+		vkDestroyBuffer(m_device, buf, nullptr);
+		vkFreeMemory(m_device, mem, nullptr);
+	}
+
+	vkDestroyDescriptorSetLayout(m_device, m_setLayout, nullptr);
 	vkDestroyPipeline(m_device, m_pipeline, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
@@ -749,7 +889,6 @@ VulkanContext::~VulkanContext() {
 
 	vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 	vkDestroyDevice(m_device, nullptr);
-
 	vkDestroySurfaceKHR(m_instance, m_windowSurface, nullptr);
 	vkDestroyInstance(m_instance, nullptr);
 }

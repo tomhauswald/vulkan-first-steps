@@ -28,6 +28,7 @@
     <ClInclude Include="..\source\common.h" />
     <ClInclude Include="..\source\renderer.h" />
     <ClInclude Include="..\source\vertex_formats.h" />
+    <ClInclude Include="..\source\vertex_uniforms.h" />
     <ClInclude Include="..\source\view.h" />
     <ClInclude Include="..\source\vulkan_context.h" />
     <ClInclude Include="..\source\vulkan_draw_call.h" />

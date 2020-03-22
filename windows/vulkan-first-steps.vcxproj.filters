@@ -47,5 +47,8 @@
     <ClInclude Include="..\source\view.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\source\vertex_uniforms.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

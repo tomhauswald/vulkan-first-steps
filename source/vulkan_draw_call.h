@@ -7,7 +7,7 @@ class VulkanDrawCall {
 private:
 	VulkanContext& m_vulkanContext;
 	size_t m_vertexCount;
-	std::tuple<VkBuffer, VkDeviceMemory> m_bufferInfo;
+	std::tuple<VkBuffer, VkDeviceMemory> m_vertexBuffer;
 	std::vector<VkCommandBuffer> m_swapchainCommandBuffers;
 
 public:
@@ -23,6 +23,6 @@ public:
 	template<typename Vertex>
 	void setVertices(View<Vertex> const& vertices) {
 		m_vertexCount = vertices.count();
-		m_bufferInfo = m_vulkanContext.createVertexBuffer(vertices);
+		m_vertexBuffer = m_vulkanContext.createVertexBuffer(vertices);
 	}
 };

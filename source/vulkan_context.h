@@ -29,12 +29,12 @@ private:
 		RENDER_EVENT_FRAME_DONE,
 		NUM_RENDER_EVENTS
 	};
-
+	
+private:
 	VkInstance m_instance;
 
 	std::vector<VkPhysicalDevice> m_physicalDevices;
 	VkPhysicalDevice m_physicalDevice;
-
 	PerPhysicalDevice<VkPhysicalDeviceProperties>           m_physicalDeviceProperties;
 	PerPhysicalDevice<VkPhysicalDeviceMemoryProperties>     m_physicalDeviceMemoryProperties;
 	PerPhysicalDevice<std::vector<VkSurfaceFormatKHR>>      m_physicalDeviceSurfaceFormats;
@@ -50,10 +50,9 @@ private:
 	std::array<VkQueue, NUM_QUEUE_ROLES>  m_queues;
 
 	VkSwapchainKHR m_swapchain;
-
-	std::vector<VkImage>         m_swapchainImages;
-	std::vector<VkImageView>     m_swapchainImageViews;
-	std::vector<VkFramebuffer>   m_swapchainFramebuffers;
+	std::vector<VkImage>       m_swapchainImages;
+	std::vector<VkImageView>   m_swapchainImageViews;
+	std::vector<VkFramebuffer> m_swapchainFramebuffers;
 	uint32_t m_swapchainImageIndex;
 
 	std::unordered_map<std::string, VkShaderModule> m_shaders;
@@ -62,18 +61,37 @@ private:
 	VkRenderPass m_renderPass;
 	VkPipeline m_pipeline;
 	VkCommandPool m_commandPool;
+	VkDescriptorSetLayout m_setLayout;
 	std::vector<VkCommandBuffer> m_clearCommandBuffers;
+
+	size_t m_uniformBufferSize;
+	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_uniformBuffers;
 
 	std::array<VkSemaphore, NUM_RENDER_EVENTS> m_semaphores;
 	
+private:
 	std::tuple<VkBuffer, VkDeviceMemory> createBuffer(
 		VkBufferUsageFlags usageMask,
 		VkMemoryPropertyFlags propertyMask,
 		size_t bytes
 	);
 
+	std::tuple<VkBuffer, VkDeviceMemory> createUniformBuffer(size_t bytes);
+
+	void writeToBuffer(
+		VkDeviceMemory& mem,
+		void const* data,
+		size_t bytes,
+		size_t offset = 0
+	);
+
+	std::tuple<VkBuffer, VkDeviceMemory> uploadToDevice(
+		std::tuple<VkBuffer, VkDeviceMemory>& host,
+		VkBufferUsageFlagBits bufferTypeFlag,
+		size_t bytes
+	);
+
 public:
-	VulkanContext() = default;
 	~VulkanContext();
 	
 	void createInstance();
@@ -106,7 +124,8 @@ public:
 		std::string const& vertexShaderName,
 		std::string const& fragmentShaderName,
 		VkVertexInputBindingDescription const& binding,
-		std::vector<VkVertexInputAttributeDescription> const& attributes
+		std::vector<VkVertexInputAttributeDescription> const& attributes,
+		size_t uniformBytes
 	);
 
 	template<typename Vertex>
@@ -114,90 +133,23 @@ public:
 		View<Vertex> const& vertices
 	) {
 		// Create CPU-accessible buffer.
-		auto [cpuBuf, cpuMem] = createBuffer(
-			VkBufferUsageFlags{ 
-				  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-				| VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-			},
-			VkMemoryPropertyFlags{
-				  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-				| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-			},
+		auto host = createBuffer(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT 
+			| VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+			| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			vertices.bytes()
 		);
 
-		// Map cpu-accessible buffer into RAM.
-		void* raw;
-		crashIf(VK_SUCCESS != vkMapMemory(
-			m_device,
-			cpuMem,
-			0,
-			vertices.bytes(),
-			0,
-			&raw
-		));
-
-		// Fill memory-mapped buffer.
-		std::memcpy(raw, vertices.items(), vertices.bytes());
-		vkUnmapMemory(m_device, cpuMem);
-
-		// Create GPU-local buffer.
-		auto [gpuBuf, gpuMem] = createBuffer(
-			VkBufferUsageFlags{
-				  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-				| VK_BUFFER_USAGE_TRANSFER_DST_BIT
-			},
-			VkMemoryPropertyFlags{
-				  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-			},
+		// Write buffer data.
+		writeToBuffer(std::get<1>(host), vertices.items(), vertices.bytes());
+		
+		// Upload to GPU.
+		return uploadToDevice(
+			host, 
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
 			vertices.bytes()
 		);
-
-		// Schedule transfer from CPU to GPU.
-
-		auto allocInfo = VkCommandBufferAllocateInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = m_commandPool;
-		allocInfo.commandBufferCount = 1;
-
-		VkCommandBuffer xferCmd;
-		crashIf(VK_SUCCESS != vkAllocateCommandBuffers(m_device, &allocInfo, &xferCmd));
-
-		auto beginInfo = VkCommandBufferBeginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-		
-		crashIf(VK_SUCCESS != vkBeginCommandBuffer(xferCmd, &beginInfo));
-		{
-			auto region = VkBufferCopy{};
-			region.size = vertices.bytes();
-			vkCmdCopyBuffer(xferCmd, cpuBuf, gpuBuf, 1, &region);
-		}
-		crashIf(VK_SUCCESS != vkEndCommandBuffer(xferCmd));
-
-		// Perform transfer command.
-
-		auto submitInfo = VkSubmitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &xferCmd;
-		
-		crashIf(VK_SUCCESS != vkQueueSubmit(
-			m_queues[QUEUE_ROLE_GRAPHICS],
-			1,
-			&submitInfo,
-			VK_NULL_HANDLE
-		));
-
-		// Wait for completion.
-		crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_GRAPHICS]));
-
-		// Release CPU-accessible resources.
-		vkDestroyBuffer(m_device, cpuBuf, nullptr);
-		vkFreeMemory(m_device, cpuMem, nullptr);
-
-		return { gpuBuf, gpuMem };
 	}
 };
 

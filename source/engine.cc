@@ -1,14 +1,15 @@
 #include "renderer.h"
 #include "vertex_formats.h"
+#include "vertex_uniforms.h"
 
 class Engine {
 private:
 	Renderer m_renderer;
 
 public:
-	template<typename Vertex>
+	template<typename Vertex, typename Uniform>
 	Engine& configureRenderer(RendererSettings const& settings) {
-		m_renderer.configure<Vertex>(settings);
+		m_renderer.configure<Vertex, Uniform>(settings);
 		return *this;
 	}
 
@@ -22,7 +23,8 @@ public:
 };
 
 int main() { 
-	Engine{}.configureRenderer<Vertex2dColored>({
+
+	Engine{}.configureRenderer<Vertex2dColored, UniformMatrix>({
 		.resolution = {1440, 900},
 		.vsyncEnabled = false,
 		.windowTitle = "Hello, Vulkan!",
@@ -31,6 +33,7 @@ int main() {
 	}).run();
 
 	std::cout << "Press [ENTER] exit application..." << lf;
-	getchar();
+	(void) getchar();
+	
 	return 0;
 }

@@ -6,7 +6,11 @@ layout(location = 1) in vec3 vertexColor;
 
 layout(location = 0) out vec3 fragmentColor;
 
+layout(binding = 0) uniform Buffer {
+	mat4 mvp;
+} data;
+
 void main() {
-	gl_Position = vec4(vertexPosition, 0.0, 1.0);
+	gl_Position = data.mvp * vec4(vertexPosition, 0.0, 1.0);
 	fragmentColor = vertexColor;
 }

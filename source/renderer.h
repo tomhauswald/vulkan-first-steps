@@ -22,7 +22,8 @@ private:
 
 	VkVertexInputBindingDescription m_vertexBinding;
 	std::vector<VkVertexInputAttributeDescription> m_vertexAttributes;
-	
+	size_t m_uniformBytes;
+
 	std::unordered_map<
 		std::string, 
 		std::unique_ptr<VulkanDrawCall>
@@ -31,7 +32,6 @@ private:
 	void createWindow();
 
 public:
-	Renderer() = default;
 	~Renderer();
 	
 	void initialize();
@@ -47,10 +47,11 @@ public:
 		m_preparedDrawCalls[name] = std::move(call);
 	}
 
-	template<typename Vertex>
+	template<typename Vertex, typename Uniform>
 	void configure(RendererSettings const& settings) {
 		m_settings = settings;
 		m_vertexBinding = Vertex::binding();
-		m_vertexAttributes = Vertex::attributes();
+		m_vertexAttributes = Vertex::attributes(); 
+		m_uniformBytes = sizeof(Uniform);
 	}
 };

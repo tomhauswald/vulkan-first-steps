@@ -19,7 +19,8 @@ void Renderer::initialize() {
 		m_settings.vertexShaderName,
 		m_settings.fragmentShaderName,
 		m_vertexBinding,
-		m_vertexAttributes
+		m_vertexAttributes,
+		m_uniformBytes
 	);
 
 	prepareDrawCall("triangle1", makeInlineView<Vertex2dColored>({
