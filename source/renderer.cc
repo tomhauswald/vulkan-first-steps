@@ -1,9 +1,12 @@
 #include "renderer.h"
 #include "vertex_formats.h"
 
-Renderer::Renderer(RendererSettings const& settings) 
-	: m_settings{ settings }, m_pWindow{ nullptr }, m_vulkanContext{} {
-	
+Renderer::Renderer(RendererSettings const& settings) : 
+	m_settings{ settings }, 
+	m_pWindow{ nullptr }, 
+	m_vulkanContext{},
+	m_preparedDrawCalls{} 
+{	
 	createWindow();
 
 	m_vulkanContext.createInstance();
@@ -13,23 +16,25 @@ Renderer::Renderer(RendererSettings const& settings)
 	m_vulkanContext.createSwapchain(settings.vsyncEnabled);
 
 	// Load shaders.
-	auto const vertexShaderName = "2d-colored.vert";
-	auto const fragmentShaderName = "unshaded.frag"; 
-	
-	for (auto const& name : {vertexShaderName, fragmentShaderName}) {
-		m_vulkanContext.loadShader(name);
-	}
+	m_vulkanContext.loadShader(settings.vertexShaderName);
+	m_vulkanContext.loadShader(settings.fragmentShaderName);
 
 	m_vulkanContext.createPipeline<Vertex2dColored>(
-		vertexShaderName, 
-		fragmentShaderName
+		settings.vertexShaderName, 
+		settings.fragmentShaderName
 	);
 
-	prepareDrawCall("triangle", makeInlineView<Vertex2dColored>({
+	prepareDrawCall("triangle1", makeInlineView<Vertex2dColored>({
 		{ {+0.0f, -0.5f}, {1.0f, 0.0f, 0.0f} },
 		{ {+0.5f, +0.5f}, {0.0f, 1.0f, 0.0f} },
 		{ {-0.5f, +0.5f}, {0.0f, 0.0f, 1.0f} }
 	}));
+
+	prepareDrawCall("triangle2", makeInlineView<Vertex2dColored>({
+		{ {+0.5f, -0.5f}, {1.0f, 0.0f, 0.0f} },
+		{ {+1.0f, +0.5f}, {0.0f, 1.0f, 0.0f} },
+		{ {+0.0f, +0.5f}, {0.0f, 0.0f, 1.0f} }
+		}));
 
 	glfwShowWindow(m_pWindow);
 }
@@ -68,8 +73,14 @@ void Renderer::handleWindowEvents() {
 void Renderer::renderScene(Scene const& scene) {
 	
 	(void)scene;
-	m_vulkanContext.beginFrame();
-	m_vulkanContext.execute(m_preparedDrawCalls.at("triangle"));
+	
+	auto calls = std::vector<VulkanDrawCall const*>{};
+	for (auto name : { "triangle1", "triangle2" }) {
+		calls.push_back(m_preparedDrawCalls.at(name).get());
+	}
+
+	m_vulkanContext.beginFrame();	
+	m_vulkanContext.execute(calls);
 	m_vulkanContext.endFrame();
 }
 

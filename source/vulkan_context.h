@@ -62,6 +62,7 @@ private:
 	VkRenderPass m_renderPass;
 	VkPipeline m_pipeline;
 	VkCommandPool m_commandPool;
+	std::vector<VkCommandBuffer> m_clearCommandBuffers;
 
 	std::array<VkSemaphore, NUM_RENDER_EVENTS> m_semaphores;
 	
@@ -73,7 +74,15 @@ public:
 	void createDevice();
 	void createSwapchain(bool vsync);
 	
-	std::vector<VkCommandBuffer> createCommandBuffers(
+	std::vector<VkCommandBuffer> recordCommands(
+		std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
+	);
+
+	std::vector<VkCommandBuffer> recordClearCommands(
+		glm::vec3 const& color
+	);
+	
+	std::vector<VkCommandBuffer> recordDrawCommands(
 		VkBuffer vertexBuffer, 
 		size_t vertexCount
 	);
@@ -81,7 +90,7 @@ public:
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);
 	void beginFrame();
-	void execute(VulkanDrawCall const& drawCall);
+	void execute(std::vector<VulkanDrawCall const*> const& calls);
 	void endFrame();
 	
 	inline VkDevice device() { return m_device; }
@@ -95,7 +104,7 @@ public:
 			VkAttachmentDescription{
 				.format = VK_FORMAT_B8G8R8A8_SRGB,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -136,7 +145,12 @@ public:
 		renderPassInfo.dependencyCount = 1;
 		renderPassInfo.pDependencies = &dependency;
 
-		crashIf(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS);
+		crashIf(VK_SUCCESS != vkCreateRenderPass(
+			m_device, 
+			&renderPassInfo, 
+			nullptr, 
+			&m_renderPass
+		));
 
 		m_swapchainFramebuffers = mapToVector<
 			decltype(m_swapchainImageViews),
@@ -249,6 +263,25 @@ public:
 		pipelineInfo.pMultisampleState = &msaaState;
 
 		crashIf(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS);
+		
+		m_clearCommandBuffers = recordClearCommands({ 1.0f, 0.0f, 0.0f });
+
+		auto semaphoreInfo = VkSemaphoreCreateInfo{};
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+		crashIf(vkCreateSemaphore(
+			m_device,
+			&semaphoreInfo,
+			nullptr,
+			&m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
+		) != VK_SUCCESS);
+
+		crashIf(vkCreateSemaphore(
+			m_device,
+			&semaphoreInfo,
+			nullptr,
+			&m_semaphores[RENDER_EVENT_FRAME_DONE]
+		) != VK_SUCCESS);
 	}
 
 	template<typename Vertex>

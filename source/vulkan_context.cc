@@ -211,6 +211,17 @@ void VulkanContext::createDevice() {
 	for (auto role : range<QueueRole>(NUM_QUEUE_ROLES)) {
 		vkGetDeviceQueue(m_device, m_queueFamilyIndices[role], 0, &m_queues[role]);
 	}
+
+	auto poolInfo = VkCommandPoolCreateInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
+
+	crashIf(VK_SUCCESS != vkCreateCommandPool(
+		m_device,
+		&poolInfo,
+		nullptr,
+		&m_commandPool
+	));
 }
 
 void VulkanContext::createSwapchain(bool vsync) {
@@ -297,7 +308,7 @@ void VulkanContext::createSwapchain(bool vsync) {
 
 VkShaderModule const& VulkanContext::loadShader(std::string const& name) {
 
-	constexpr auto shaderBasePath = "../assets/shaders/";
+	constexpr auto shaderBasePath = "../assets/shaders/spirv/";
 	constexpr auto shaderExt = ".spv";
 
 	auto path = shaderBasePath + name + shaderExt;
@@ -338,19 +349,9 @@ void VulkanContext::accomodateWindow(GLFWwindow* window) {
 	crashIf(glfwCreateWindowSurface(m_instance, window, nullptr, &m_windowSurface) != VK_SUCCESS);
 }
 
-std::vector<VkCommandBuffer> VulkanContext::createCommandBuffers(VkBuffer vertexBuffer, size_t vertexCount) {
-
-	auto poolInfo = VkCommandPoolCreateInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
-
-	crashIf(VK_SUCCESS != vkCreateCommandPool(
-		m_device, 
-		&poolInfo, 
-		nullptr,
-		&m_commandPool
-	));
-
+std::vector<VkCommandBuffer> VulkanContext::recordCommands(
+	std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
+) {
 	auto allocateInfo = VkCommandBufferAllocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocateInfo.commandPool = m_commandPool;
@@ -361,17 +362,14 @@ std::vector<VkCommandBuffer> VulkanContext::createCommandBuffers(VkBuffer vertex
 	auto cmdbufs = std::vector<VkCommandBuffer>(swapchainImageCount);
 	crashIf(vkAllocateCommandBuffers(m_device, &allocateInfo, cmdbufs.data()) != VK_SUCCESS);
 
-	auto clearValue = VkClearValue{ .color = {.float32 = { 1.0f, 0.0f, 0.0f, 1.0f } } };
-	
 	for (size_t i = 0; i < swapchainImageCount; ++i) {
-
-		auto& cmdbuf = cmdbufs[i];
 
 		auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
 		cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		crashIf(vkBeginCommandBuffer(cmdbuf, &cmdbufBeginInfo) != VK_SUCCESS);
+		crashIf(vkBeginCommandBuffer(cmdbufs[i], &cmdbufBeginInfo) != VK_SUCCESS);
 		{
+			auto clearValue = VkClearValue{};
 			auto passBeginInfo = VkRenderPassBeginInfo{};
 			passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 			passBeginInfo.framebuffer = m_swapchainFramebuffers[i];
@@ -380,38 +378,51 @@ std::vector<VkCommandBuffer> VulkanContext::createCommandBuffers(VkBuffer vertex
 			passBeginInfo.renderPass = m_renderPass;
 			passBeginInfo.renderArea.extent = m_windowExtent;
 
-			vkCmdBeginRenderPass(cmdbuf, &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(cmdbufs[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
-				vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-
-				auto const offsetZero = VkDeviceSize{};
-				vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertexBuffer, &offsetZero);
-
-				vkCmdDraw(cmdbuf, static_cast<uint32_t>(vertexCount), 1, 0, 0);
+				vkCmdBindPipeline(cmdbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+				vkCmdLambda(cmdbufs[i], i);
 			}
-			vkCmdEndRenderPass(cmdbuf);
+			vkCmdEndRenderPass(cmdbufs[i]);
 		}
-		crashIf(vkEndCommandBuffer(cmdbuf) != VK_SUCCESS);
+		crashIf(vkEndCommandBuffer(cmdbufs[i]) != VK_SUCCESS);
 	}
 
-	auto semaphoreInfo = VkSemaphoreCreateInfo{};
-	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	crashIf(vkCreateSemaphore(
-		m_device,
-		&semaphoreInfo,
-		nullptr,
-		&m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
-	) != VK_SUCCESS);
-
-	crashIf(vkCreateSemaphore(
-		m_device,
-		&semaphoreInfo,
-		nullptr,
-		&m_semaphores[RENDER_EVENT_FRAME_DONE]
-	) != VK_SUCCESS);
-
 	return cmdbufs;
+}
+
+std::vector<VkCommandBuffer> VulkanContext::recordClearCommands(glm::vec3 const& color) {
+	
+	auto colorAttachment = VkClearAttachment{};
+	colorAttachment.colorAttachment = 0;
+	colorAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	colorAttachment.clearValue.color = { .float32 = { color.r, color.g, color.b, 0.0f } };
+
+	auto clearRect = VkClearRect{};
+	clearRect.baseArrayLayer = 0;
+	clearRect.layerCount = 1;
+	clearRect.rect.extent = m_windowExtent;
+
+	return recordCommands([&](VkCommandBuffer cmdbuf, size_t i) {
+		vkCmdClearAttachments(
+			cmdbuf,
+			1,
+			&colorAttachment,
+			1,
+			&clearRect
+		);
+	});
+}
+
+std::vector<VkCommandBuffer> VulkanContext::recordDrawCommands(
+	VkBuffer vertexBuffer, 
+	size_t vertexCount
+) {
+	return recordCommands([&](VkCommandBuffer cmdbuf, size_t i) {
+		auto const offsetZero = VkDeviceSize{};
+		vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertexBuffer, &offsetZero);
+		vkCmdDraw(cmdbuf, static_cast<uint32_t>(vertexCount), 1, 0, 0);
+	});
 }
 
 void VulkanContext::beginFrame() {
@@ -444,13 +455,19 @@ void VulkanContext::endFrame() {
 	crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_PRESENTATION]));
 }
 
-void VulkanContext::execute(VulkanDrawCall const& drawCall) {
+void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
+
+	auto cmdbufs = std::vector<VkCommandBuffer>(calls.size() + 1);
+	cmdbufs[0] = m_clearCommandBuffers[m_swapchainImageIndex];
+	for (size_t i = 0; i < calls.size(); ++i) {
+		cmdbufs[i + 1] = calls[i]->swapchainCommandBuffer(m_swapchainImageIndex);
+	}
 
 	auto stage = VkPipelineStageFlags{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	auto submitInfo = VkSubmitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &drawCall.swapchainCommandBuffer(m_swapchainImageIndex);
+	submitInfo.commandBufferCount = cmdbufs.size();
+	submitInfo.pCommandBuffers = cmdbufs.data();
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitDstStageMask = &stage;
 	submitInfo.pWaitSemaphores = &m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE];

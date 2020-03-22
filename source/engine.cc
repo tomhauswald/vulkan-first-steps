@@ -21,9 +21,15 @@ public:
 };
 
 int main() { 
-	return Engine{}.configureRenderer({ 
+	
+	Engine{}.configureRenderer({
 		.resolution = {1440, 900},
-		.vsyncEnabled = true,
-		.windowTitle = "Hello, Vulkan!"
+		.vsyncEnabled = false,
+		.windowTitle = "Hello, Vulkan!",
+		.vertexShaderName = "vert-2d-colored",
+		.fragmentShaderName = "frag-unshaded"
 	}).run();
+
+	std::cout << "Press [ENTER] exit application..." << lf;
+	return getchar();
 }

@@ -10,16 +10,20 @@ struct RendererSettings {
 	glm::uvec2 resolution;
 	bool vsyncEnabled;
 	std::string windowTitle;
+	std::string vertexShaderName;
+	std::string fragmentShaderName;
 };
 
 class Renderer {
 private:
 	RendererSettings const& m_settings;
-
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
-	std::unordered_map<std::string, VulkanDrawCall> m_preparedDrawCalls;
+	std::unordered_map<
+		std::string, 
+		std::unique_ptr<VulkanDrawCall>
+	> m_preparedDrawCalls;
 
 	void createWindow();
 
@@ -32,9 +36,10 @@ public:
 
 	template<typename Vertex>
 	void prepareDrawCall(std::string const& name, View<Vertex> vertices) {
-		m_preparedDrawCalls.try_emplace(name, VulkanDrawCall(m_vulkanContext));
-		m_preparedDrawCalls.at(name).setVertices(vertices);
-		m_preparedDrawCalls.at(name).prepare();
+		auto call = std::make_unique<VulkanDrawCall>(m_vulkanContext);
+		call->setVertices(vertices);
+		call->prepare();
+		m_preparedDrawCalls[name] = std::move(call);
 	}
 
 	~Renderer();

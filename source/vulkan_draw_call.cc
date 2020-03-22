@@ -9,13 +9,15 @@ VulkanDrawCall::VulkanDrawCall(VulkanContext& vulkanContext) :
 }
 
 void VulkanDrawCall::prepare() {
-	m_swapchainCommandBuffers = m_vulkanContext.createCommandBuffers(
+	m_swapchainCommandBuffers = m_vulkanContext.recordDrawCommands(
 		m_vertexBuffer,
 		m_vertexCount
 	);
 }
 
 VulkanDrawCall::~VulkanDrawCall() {
+
+	vkDeviceWaitIdle(m_vulkanContext.device());
 
 	if (m_vertexBuffer != VK_NULL_HANDLE) {
 		vkDestroyBuffer(m_vulkanContext.device(), m_vertexBuffer, nullptr);
