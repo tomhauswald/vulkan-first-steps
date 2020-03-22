@@ -3,27 +3,23 @@
 VulkanDrawCall::VulkanDrawCall(VulkanContext& vulkanContext) :
 	m_vulkanContext{ vulkanContext },
 	m_vertexCount{ 0 },
-	m_vertexBuffer{ VK_NULL_HANDLE },
-	m_vertexBufferMemory{ VK_NULL_HANDLE },
+	m_bufferInfo{},
 	m_swapchainCommandBuffers{} {
 }
 
 void VulkanDrawCall::prepare() {
 	m_swapchainCommandBuffers = m_vulkanContext.recordDrawCommands(
-		m_vertexBuffer,
+		std::get<0>(m_bufferInfo),
 		m_vertexCount
 	);
 }
 
 VulkanDrawCall::~VulkanDrawCall() {
 
-	vkDeviceWaitIdle(m_vulkanContext.device());
+	crashIf(VK_SUCCESS != vkDeviceWaitIdle(m_vulkanContext.device()));
 
-	if (m_vertexBuffer != VK_NULL_HANDLE) {
-		vkDestroyBuffer(m_vulkanContext.device(), m_vertexBuffer, nullptr);
-	}
+	auto [buf, mem] = m_bufferInfo;
 
-	if (m_vertexBufferMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(m_vulkanContext.device(), m_vertexBufferMemory, nullptr);
-	}
+	vkDestroyBuffer(m_vulkanContext.device(), buf, nullptr);
+	vkFreeMemory(m_vulkanContext.device(), mem, nullptr);
 }

@@ -36,11 +36,6 @@ Platform::Linux
 constexpr auto lf  = '\n';
 constexpr auto tab = '\t';
 
-template<typename Number>
-constexpr bool nthBitHi(Number self, size_t n) {
-	return self & (1 << n);
-}
-
 // Throws a runtime exception if Expr evaluates to true.
 // The exception states the current source location,
 // as well as the textual expression that was checked.
@@ -53,6 +48,16 @@ constexpr bool nthBitHi(Number self, size_t n) {
 		} \
 		throw std::runtime_error(message.str()); \
 	} \
+}
+
+template<typename Number>
+constexpr bool nthBitHi(Number num, size_t n) {
+	return num & (1 << n);
+}
+
+template<typename Number>
+bool satisfiesBitMask(Number num, size_t mask) {
+	return (num & mask) == mask;
 }
 
 // Maps an input range to a vector by applying the given mapping

@@ -455,6 +455,52 @@ void VulkanContext::endFrame() {
 	crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_PRESENTATION]));
 }
 
+std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
+	VkBufferUsageFlags usageMask,
+	VkMemoryPropertyFlags propertyMask,
+	size_t bytes
+) {
+	auto bufferInfo = VkBufferCreateInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.queueFamilyIndexCount = 1;
+	bufferInfo.pQueueFamilyIndices = &m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
+	bufferInfo.usage = usageMask;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	bufferInfo.size = static_cast<VkDeviceSize>(bytes);
+
+	auto buf = VkBuffer{};
+	vkCreateBuffer(m_device, &bufferInfo, nullptr, &buf);
+
+	auto memReqmt = VkMemoryRequirements{};
+	vkGetBufferMemoryRequirements(m_device, buf, &memReqmt);
+
+	auto allocInfo = VkMemoryAllocateInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memReqmt.size;
+	allocInfo.memoryTypeIndex = -1;
+
+	// Find suitable memory type.
+	auto const& devMemProps = m_physicalDeviceMemoryProperties.at(m_physicalDevice);
+	for (uint32_t i = 0; i < devMemProps.memoryTypeCount; ++i) {
+
+		if (!nthBitHi(memReqmt.memoryTypeBits, i)) continue; // Skip types according to mask.
+
+		if (satisfiesBitMask(
+			devMemProps.memoryTypes[i].propertyFlags,
+			propertyMask
+		)) {
+			allocInfo.memoryTypeIndex = i;
+			break;
+		}
+	}
+
+	auto mem = VkDeviceMemory{};
+	crashIf(vkAllocateMemory(m_device, &allocInfo, nullptr, &mem) != VK_SUCCESS);
+	crashIf(vkBindBufferMemory(m_device, buf, mem, 0) != VK_SUCCESS);
+
+	return { buf, mem };
+}
+
 void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
 
 	auto cmdbufs = std::vector<VkCommandBuffer>(calls.size() + 1);
@@ -484,7 +530,7 @@ void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
 
 VulkanContext::~VulkanContext() {
 
-	vkDeviceWaitIdle(m_device);
+	crashIf(VK_SUCCESS != vkDeviceWaitIdle(m_device));
 
 	for (auto semaphore : m_semaphores) {
 		vkDestroySemaphore(m_device, semaphore, nullptr);

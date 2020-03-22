@@ -87,6 +87,12 @@ public:
 		size_t vertexCount
 	);
 
+	std::tuple<VkBuffer, VkDeviceMemory> createBuffer(
+		VkBufferUsageFlags usageMask,
+		VkMemoryPropertyFlags propertyMask,
+		size_t bytes
+	);
+
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);
 	void beginFrame();
@@ -285,55 +291,94 @@ public:
 	}
 
 	template<typename Vertex>
-	VkBuffer createVertexBuffer(View<Vertex> const& vertices, VkDeviceMemory& outMemory) {
+	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(
+		View<Vertex> const& vertices
+	) {
+		// Create CPU-accessible buffer.
+		auto [cpuBuf, cpuMem] = createBuffer(
+			VkBufferUsageFlags{ 
+				  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+				| VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+			},
+			VkMemoryPropertyFlags{
+				  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+				| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+			},
+			vertices.bytes()
+		);
 
-		auto vertexBufferInfo = VkBufferCreateInfo{};
-		vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		vertexBufferInfo.queueFamilyIndexCount = 1;
-		vertexBufferInfo.pQueueFamilyIndices = &m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
-		vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		vertexBufferInfo.size = static_cast<VkDeviceSize>(vertices.bytes());
-
-		auto vertexBuffer = VkBuffer{};
-		vkCreateBuffer(m_device, &vertexBufferInfo, nullptr, &vertexBuffer);
-
-		auto memReqmt = VkMemoryRequirements{};
-		vkGetBufferMemoryRequirements(m_device, vertexBuffer, &memReqmt);
-
-		auto memReqProps = VkMemoryPropertyFlags{
-			  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-			| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-		};
-
-		auto allocInfo = VkMemoryAllocateInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memReqmt.size;
-		allocInfo.memoryTypeIndex = -1;
-
-		// Find suitable memory type.
-		auto const& devMemProps = m_physicalDeviceMemoryProperties.at(m_physicalDevice);
-		for (uint32_t i = 0; i < devMemProps.memoryTypeCount; ++i) {
-
-			if (!nthBitHi(memReqmt.memoryTypeBits, i)) continue; // Skip types according to mask.
-
-			else if (devMemProps.memoryTypes[i].propertyFlags & memReqProps) {
-				allocInfo.memoryTypeIndex = i;
-				break;
-			}
-		}
-
-		crashIf(vkAllocateMemory(m_device, &allocInfo, nullptr, &outMemory) != VK_SUCCESS);
-		crashIf(vkBindBufferMemory(m_device, vertexBuffer, outMemory, 0) != VK_SUCCESS);
-
+		// Map cpu-accessible buffer into RAM.
 		void* raw;
-		crashIf(vkMapMemory(m_device, outMemory, 0, vertexBufferInfo.size, 0, &raw) != VK_SUCCESS);
-		{
-			std::memcpy(raw, vertices.items(), vertices.bytes());
-		}
-		vkUnmapMemory(m_device, outMemory);
+		crashIf(VK_SUCCESS != vkMapMemory(
+			m_device,
+			cpuMem,
+			0,
+			vertices.bytes(),
+			0,
+			&raw
+		));
 
-		return vertexBuffer;
+		// Fill memory-mapped buffer.
+		std::memcpy(raw, vertices.items(), vertices.bytes());
+		vkUnmapMemory(m_device, cpuMem);
+
+		// Create GPU-local buffer.
+		auto [gpuBuf, gpuMem] = createBuffer(
+			VkBufferUsageFlags{
+				  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+				| VK_BUFFER_USAGE_TRANSFER_DST_BIT
+			},
+			VkMemoryPropertyFlags{
+				  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+			},
+			vertices.bytes()
+		);
+
+		// Schedule transfer from CPU to GPU.
+
+		auto allocInfo = VkCommandBufferAllocateInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = m_commandPool;
+		allocInfo.commandBufferCount = 1;
+
+		VkCommandBuffer xferCmd;
+		crashIf(VK_SUCCESS != vkAllocateCommandBuffers(m_device, &allocInfo, &xferCmd));
+
+		auto beginInfo = VkCommandBufferBeginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		
+		crashIf(VK_SUCCESS != vkBeginCommandBuffer(xferCmd, &beginInfo));
+		{
+			auto region = VkBufferCopy{};
+			region.size = vertices.bytes();
+			vkCmdCopyBuffer(xferCmd, cpuBuf, gpuBuf, 1, &region);
+		}
+		crashIf(VK_SUCCESS != vkEndCommandBuffer(xferCmd));
+
+		// Perform transfer command.
+
+		auto submitInfo = VkSubmitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &xferCmd;
+		
+		crashIf(VK_SUCCESS != vkQueueSubmit(
+			m_queues[QUEUE_ROLE_GRAPHICS],
+			1,
+			&submitInfo,
+			VK_NULL_HANDLE
+		));
+
+		// Wait for completion.
+		crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_GRAPHICS]));
+
+		// Release CPU-accessible resources.
+		vkDestroyBuffer(m_device, cpuBuf, nullptr);
+		vkFreeMemory(m_device, cpuMem, nullptr);
+
+		return { gpuBuf, gpuMem };
 	}
 };
 
