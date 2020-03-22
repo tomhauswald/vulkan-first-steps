@@ -9,7 +9,8 @@ constexpr std::array requiredDeviceExtensions{
 };
 
 constexpr std::array validationLayers{
-	"VK_LAYER_LUNARG_standard_validation"
+	"VK_LAYER_LUNARG_standard_validation",
+	"VK_LAYER_LUNARG_monitor"
 };
 
 void VulkanContext::createInstance() {
@@ -71,11 +72,11 @@ void VulkanContext::selectPhysicalDevice() {
 		auto hasExtensions = std::all_of(
 			std::begin(requiredDeviceExtensions),
 			std::end(requiredDeviceExtensions),
-			[&](auto const& req) {
+			[&](char const* req) {
 				return contains(
 					m_physicalDeviceExtensions[candidate],
-					[&](auto const& ext) {
-						return !strcmp(req, ext.extensionName);
+					[&](VkExtensionProperties const& ext) {
+						return (0 == strcmp(req, ext.extensionName));
 					}
 				);
 			}
@@ -95,7 +96,12 @@ void VulkanContext::selectPhysicalDevice() {
 			range(m_physicalDeviceQueueFamilies[candidate].size()),
 			[&](auto famIdx) {
 				VkBool32 supported;
-				vkGetPhysicalDeviceSurfaceSupportKHR(candidate, famIdx, m_windowSurface, &supported);
+				crashIf(VK_SUCCESS != vkGetPhysicalDeviceSurfaceSupportKHR(
+					candidate,
+					famIdx,
+					m_windowSurface,
+					&supported
+				));
 				return supported;
 			},
 			&presentationFamilyIndex
@@ -149,7 +155,7 @@ void VulkanContext::selectPhysicalDevice() {
 			if (
 				prevProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
 				props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-				) {
+			) {
 				isUpgrade = true;
 			}
 
@@ -158,7 +164,7 @@ void VulkanContext::selectPhysicalDevice() {
 				prevProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
 				props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
 				props.limits.maxImageDimension1D > prevProps.limits.maxImageDimension1D
-				) {
+			) {
 				isUpgrade = true;
 			}
 		}
@@ -207,41 +213,60 @@ void VulkanContext::createDevice() {
 	}
 }
 
-void VulkanContext::createSwapchain() {
+void VulkanContext::createSwapchain(bool vsync) {
 
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_windowSurface, &surfaceCapabilities);
+	crashIf(VK_SUCCESS != vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+		m_physicalDevice,
+		m_windowSurface,
+		&surfaceCapabilities
+	));
 
 	auto maxImages = (
-		surfaceCapabilities.maxImageCount
-		? surfaceCapabilities.maxImageCount
-		: UINT32_MAX
-		);
+		(surfaceCapabilities.maxImageCount != 0)
+		? (surfaceCapabilities.maxImageCount)
+		: (UINT32_MAX)
+	);
 
-	VkSwapchainCreateInfoKHR createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	createInfo.surface = m_windowSurface;
-	createInfo.minImageCount = std::min(surfaceCapabilities.minImageCount + 1, maxImages);
-	createInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
-	createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	createInfo.imageExtent = m_windowExtent;
-	createInfo.imageArrayLayers = 1;
-	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	createInfo.preTransform = surfaceCapabilities.currentTransform;
-	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-	createInfo.clipped = VK_TRUE;
+	auto swapchainInfo = VkSwapchainCreateInfoKHR{};
+	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapchainInfo.surface = m_windowSurface;
+	swapchainInfo.minImageCount = std::min(surfaceCapabilities.minImageCount + 1, maxImages);
+	swapchainInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	swapchainInfo.imageExtent = m_windowExtent;
+	swapchainInfo.imageArrayLayers = 1;
+	swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
+	swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swapchainInfo.clipped = VK_TRUE;
 
-	std::set<uint32_t> uniqueIndices{
-		m_queueFamilyIndices.begin(),
-		m_queueFamilyIndices.end()
-	};
-	auto sameQueue = (uniqueIndices.size() == 1);
-	createInfo.imageSharingMode = sameQueue ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
-	createInfo.queueFamilyIndexCount = sameQueue ? NUM_QUEUE_ROLES : 0;
-	createInfo.pQueueFamilyIndices = sameQueue ? m_queueFamilyIndices.data() : nullptr;
+	swapchainInfo.presentMode = (
+		(vsync)
+		? (VK_PRESENT_MODE_FIFO_KHR)
+		: (VK_PRESENT_MODE_MAILBOX_KHR)
+	);
 
-	crashIf(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapchain) != VK_SUCCESS);
+	// Are graphics and presentation capabilities provided by the same queue family.
+	auto sameQFam = (uniqueElemCount(m_queueFamilyIndices) == 1);
+	
+	swapchainInfo.imageSharingMode = (
+		(sameQFam) 
+		? (VK_SHARING_MODE_EXCLUSIVE)
+		: (VK_SHARING_MODE_CONCURRENT)
+	);
+	
+	if (sameQFam) {
+		swapchainInfo.queueFamilyIndexCount = NUM_QUEUE_ROLES;
+		swapchainInfo.pQueueFamilyIndices = m_queueFamilyIndices.data();
+	}
+
+	crashIf(VK_SUCCESS != vkCreateSwapchainKHR(
+		m_device, 
+		&swapchainInfo, 
+		nullptr, 
+		&m_swapchain
+	));
 
 	m_swapchainImages = queryVulkanResources<VkImage, VkDevice, VkSwapchainKHR>(
 		&vkGetSwapchainImagesKHR,

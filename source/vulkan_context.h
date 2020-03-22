@@ -71,7 +71,7 @@ public:
 	void createInstance();
 	void selectPhysicalDevice();
 	void createDevice();
-	void createSwapchain();
+	void createSwapchain(bool vsync);
 	
 	std::vector<VkCommandBuffer> createCommandBuffers(
 		VkBuffer vertexBuffer, 

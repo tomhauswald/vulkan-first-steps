@@ -1,15 +1,16 @@
 #include "renderer.h"
 #include "vertex_formats.h"
 
-Renderer::Renderer() : m_pWindow(nullptr) {
+Renderer::Renderer(RendererSettings const& settings) 
+	: m_settings{ settings }, m_pWindow{ nullptr }, m_vulkanContext{} {
 	
-	createWindow(1440, 900);
+	createWindow();
 
 	m_vulkanContext.createInstance();
 	m_vulkanContext.accomodateWindow(m_pWindow);
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
-	m_vulkanContext.createSwapchain();
+	m_vulkanContext.createSwapchain(settings.vsyncEnabled);
 
 	// Load shaders.
 	auto const vertexShaderName = "2d-colored.vert";
@@ -33,7 +34,7 @@ Renderer::Renderer() : m_pWindow(nullptr) {
 	glfwShowWindow(m_pWindow);
 }
 
-void Renderer::createWindow(size_t resX, size_t resY) {
+void Renderer::createWindow() {
 
 	// Initialize GLFW.
 	crashIf(!glfwInit());
@@ -45,9 +46,9 @@ void Renderer::createWindow(size_t resX, size_t resY) {
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
 	m_pWindow = glfwCreateWindow(
-		static_cast<int>(resX),
-		static_cast<int>(resY),
-		"Hello, Vulkan!",
+		static_cast<int>(m_settings.resolution.x),
+		static_cast<int>(m_settings.resolution.y),
+		m_settings.windowTitle.c_str(),
 		nullptr,
 		nullptr
 	);

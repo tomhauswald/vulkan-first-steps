@@ -6,16 +6,25 @@
 
 struct Scene { };
 
+struct RendererSettings {
+	glm::uvec2 resolution;
+	bool vsyncEnabled;
+	std::string windowTitle;
+};
+
 class Renderer {
 private:
+	RendererSettings const& m_settings;
+
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
-	void createWindow(size_t resX, size_t resY);
-	
+
 	std::unordered_map<std::string, VulkanDrawCall> m_preparedDrawCalls;
 
+	void createWindow();
+
 public:
-	Renderer();
+	Renderer(RendererSettings const& settings);
 
 	bool isWindowOpen() const;
 	void handleWindowEvents();

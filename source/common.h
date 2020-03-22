@@ -97,3 +97,8 @@ std::vector<Elem> range(size_t count) {
 	}
 	return std::move(r);
 }
+
+template<typename Container>
+size_t uniqueElemCount(Container const& container) {
+	return std::set(std::begin(container), std::end(container)).size();
+}

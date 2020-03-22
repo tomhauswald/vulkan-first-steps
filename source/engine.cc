@@ -3,18 +3,27 @@
 
 class Engine {
 private:
-	Renderer m_renderer;
+	std::unique_ptr<Renderer> m_pRenderer;
 
 public:
+	Engine& configureRenderer(RendererSettings const& settings) {
+		m_pRenderer = std::make_unique<Renderer>(settings);
+		return *this;
+	}
+
 	int run() {
-		while (m_renderer.isWindowOpen()) {
-			m_renderer.renderScene({});
-			m_renderer.handleWindowEvents();
+		while (m_pRenderer->isWindowOpen()) {
+			m_pRenderer->renderScene({});
+			m_pRenderer->handleWindowEvents();
 		}
 		return 0;
 	}
 };
 
 int main() { 
-	return Engine{}.run();
+	return Engine{}.configureRenderer({ 
+		.resolution = {1440, 900},
+		.vsyncEnabled = true,
+		.windowTitle = "Hello, Vulkan!"
+	}).run();
 }
