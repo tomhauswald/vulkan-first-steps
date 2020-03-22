@@ -44,7 +44,7 @@ auto describeVertexInputAttributes(uint32_t binding) {
 	uint32_t location = 0;
 	uint32_t offset = 0;
 	
-	return std::array{
+	return std::vector{
 		describeVertexInputAttribute<Attributes>(
 			location++, 
 			([&]() {

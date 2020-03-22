@@ -1,27 +1,25 @@
 #include "renderer.h"
 #include "vertex_formats.h"
 
-Renderer::Renderer(RendererSettings const& settings) : 
-	m_settings{ settings }, 
-	m_pWindow{ nullptr }, 
-	m_vulkanContext{},
-	m_preparedDrawCalls{} 
-{	
+void Renderer::initialize() {	
+
 	createWindow();
 
 	m_vulkanContext.createInstance();
 	m_vulkanContext.accomodateWindow(m_pWindow);
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
-	m_vulkanContext.createSwapchain(settings.vsyncEnabled);
+	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
 
 	// Load shaders.
-	m_vulkanContext.loadShader(settings.vertexShaderName);
-	m_vulkanContext.loadShader(settings.fragmentShaderName);
+	m_vulkanContext.loadShader(m_settings.vertexShaderName);
+	m_vulkanContext.loadShader(m_settings.fragmentShaderName);
 
-	m_vulkanContext.createPipeline<Vertex2dColored>(
-		settings.vertexShaderName, 
-		settings.fragmentShaderName
+	m_vulkanContext.createPipeline(
+		m_settings.vertexShaderName,
+		m_settings.fragmentShaderName,
+		m_vertexBinding,
+		m_vertexAttributes
 	);
 
 	prepareDrawCall("triangle1", makeInlineView<Vertex2dColored>({

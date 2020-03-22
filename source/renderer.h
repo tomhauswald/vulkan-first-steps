@@ -16,10 +16,13 @@ struct RendererSettings {
 
 class Renderer {
 private:
-	RendererSettings const& m_settings;
+	RendererSettings m_settings;
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
+	VkVertexInputBindingDescription m_vertexBinding;
+	std::vector<VkVertexInputAttributeDescription> m_vertexAttributes;
+	
 	std::unordered_map<
 		std::string, 
 		std::unique_ptr<VulkanDrawCall>
@@ -28,8 +31,10 @@ private:
 	void createWindow();
 
 public:
-	Renderer(RendererSettings const& settings);
-
+	Renderer() = default;
+	~Renderer();
+	
+	void initialize();
 	bool isWindowOpen() const;
 	void handleWindowEvents();
 	void renderScene(Scene const& scene);
@@ -42,5 +47,10 @@ public:
 		m_preparedDrawCalls[name] = std::move(call);
 	}
 
-	~Renderer();
+	template<typename Vertex>
+	void configure(RendererSettings const& settings) {
+		m_settings = settings;
+		m_vertexBinding = Vertex::binding();
+		m_vertexAttributes = Vertex::attributes();
+	}
 };

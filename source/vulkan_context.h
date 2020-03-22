@@ -72,14 +72,8 @@ private:
 		size_t bytes
 	);
 
-	void createPipeline(
-		std::string const& vertexShaderName,
-		std::string const& fragmentShaderName,
-		VkVertexInputBindingDescription const& binding,
-		View<VkVertexInputAttributeDescription> const& attributes
-	);
-
 public:
+	VulkanContext() = default;
 	~VulkanContext();
 	
 	void createInstance();
@@ -108,18 +102,12 @@ public:
 	
 	inline VkDevice device() { return m_device; }
 
-	template<typename Vertex>
 	void createPipeline(
-		std::string const& vertexShaderName, 
-		std::string const& fragmentShaderName
-	) {
-		createPipeline(
-			vertexShaderName, 
-			fragmentShaderName, 
-			Vertex::binding(), 
-			makeContainerView(Vertex::attributes())
-		);
-	}
+		std::string const& vertexShaderName,
+		std::string const& fragmentShaderName,
+		VkVertexInputBindingDescription const& binding,
+		std::vector<VkVertexInputAttributeDescription> const& attributes
+	);
 
 	template<typename Vertex>
 	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(

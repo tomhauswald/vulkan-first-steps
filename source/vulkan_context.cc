@@ -505,7 +505,7 @@ void VulkanContext::createPipeline(
 	std::string const& vertexShaderName, 
 	std::string const& fragmentShaderName, 
 	VkVertexInputBindingDescription const& binding, 
-	View<VkVertexInputAttributeDescription> const& attributes
+	std::vector<VkVertexInputAttributeDescription> const& attributes
 ) {
 	auto colorAttachments = std::array{
 		VkAttachmentDescription{
@@ -587,8 +587,8 @@ void VulkanContext::createPipeline(
 
 	auto vertexInput = VkPipelineVertexInputStateCreateInfo{};
 	vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInput.vertexAttributeDescriptionCount = attributes.count();
-	vertexInput.pVertexAttributeDescriptions = attributes.items();
+	vertexInput.vertexAttributeDescriptionCount = attributes.size();
+	vertexInput.pVertexAttributeDescriptions = attributes.data();
 	vertexInput.vertexBindingDescriptionCount = 1;
 	vertexInput.pVertexBindingDescriptions = &binding;
 
