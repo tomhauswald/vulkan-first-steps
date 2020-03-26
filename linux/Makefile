@@ -1,7 +1,7 @@
 .SUFFIXES:
 	
-CXX       := clang++-9
-CXX_STD   := gnu++2a
+CXX       := clang++-10
+CXX_STD   := c++20
 CXX_FLAGS := \
 	-std=$(CXX_STD) \
 	-MMD -MP \
@@ -15,8 +15,8 @@ else
 CXX_FLAGS += -g -O0 -D_DEBUG
 endif
 
-LD        := clang++-9
-LD_FLAGS  := -std=$(CXX_STD) `pkg-config --static --libs glfw3` -lvulkan
+LD        := clang++-10
+LD_FLAGS  := -std=$(CXX_STD) `pkg-config --static --libs glfw3` -lvulkan 
 
 BINARY  := ./bin/$(if $(RELEASE),release,debug).elf
 SOURCES := $(wildcard ../source/*.cc)

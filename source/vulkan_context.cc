@@ -722,7 +722,7 @@ void VulkanContext::createPipeline(
 	setLayoutInfo.bindingCount = 1;
 	setLayoutInfo.pBindings = &setLayoutBinding;
 
-	if (VK_SUCCESS != vkCreateDescriptorSetLayout(
+	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
 		m_device,
 		&setLayoutInfo,
 		nullptr,
@@ -773,8 +773,13 @@ void VulkanContext::createPipeline(
 	msaaState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	msaaState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	if (!m_shaders.contains(vertexShaderName)) loadShader(vertexShaderName);
-	if (!m_shaders.contains(fragmentShaderName)) loadShader(fragmentShaderName);
+	if (m_shaders.count(vertexShaderName) == 0) {
+		loadShader(vertexShaderName);
+	}
+	
+	if (m_shaders.count(fragmentShaderName) == 0) {
+		loadShader(fragmentShaderName);
+	}
 
 	auto stages = std::array{
 		VkPipelineShaderStageCreateInfo{

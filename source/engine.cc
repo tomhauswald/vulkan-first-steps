@@ -6,7 +6,9 @@ struct EngineSettings {
 
 class Engine {
 private:
+	[[maybe_unused]]
 	EngineSettings const& m_settings;
+	
 	Renderer m_renderer;
 
 public:
