@@ -10,6 +10,8 @@
 
 #include "common.h"
 #include "view.h"
+#include "vertex.h"
+#include "uniform.h"
 
 class VulkanDrawCall;
 
@@ -50,22 +52,27 @@ private:
 	std::array<VkQueue, NUM_QUEUE_ROLES>  m_queues;
 
 	VkSwapchainKHR m_swapchain;
-	std::vector<VkImage>       m_swapchainImages;
-	std::vector<VkImageView>   m_swapchainImageViews;
-	std::vector<VkFramebuffer> m_swapchainFramebuffers;
 	uint32_t m_swapchainImageIndex;
+	std::vector<VkImage> m_swapchainImages;
+	std::vector<VkImageView> m_swapchainImageViews;
+	std::vector<VkFramebuffer> m_swapchainFramebuffers;
+	std::vector<VkDescriptorSet> m_swapchainDescriptorSets;
+	std::vector<VkCommandBuffer> m_swapchainClearCmdbufs;
+	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_swapchainUniformBuffers;
 
 	std::unordered_map<std::string, VkShaderModule> m_shaders;
+
+	VkVertexInputBindingDescription m_vertexBinding;
+	std::vector<VkVertexInputAttributeDescription> m_vertexAttributes;
 
 	VkPipelineLayout m_pipelineLayout;
 	VkRenderPass m_renderPass;
 	VkPipeline m_pipeline;
 	VkCommandPool m_commandPool;
 	VkDescriptorSetLayout m_setLayout;
-	std::vector<VkCommandBuffer> m_clearCommandBuffers;
 
+	VkDescriptorPool m_descriptorPool;
 	size_t m_uniformBufferSize;
-	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_uniformBuffers;
 
 	std::array<VkSemaphore, NUM_RENDER_EVENTS> m_semaphores;
 	
@@ -100,7 +107,7 @@ public:
 	void createSwapchain(bool vsync);
 	
 	std::vector<VkCommandBuffer> recordCommands(
-		std::function<void(VkCommandBuffer)> const& vkCmdLambda
+		std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
 	);
 
 	std::vector<VkCommandBuffer> recordClearCommands(
@@ -114,9 +121,9 @@ public:
 
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);
-	void beginFrame();
+	void onFrameBegin();
 	void execute(std::vector<VulkanDrawCall const*> const& calls);
-	void endFrame();
+	void onFrameDone();
 	
 	inline VkDevice device() { return m_device; }
 
@@ -125,10 +132,11 @@ public:
 		std::string const& fragmentShaderName,
 		VkVertexInputBindingDescription const& binding,
 		std::vector<VkVertexInputAttributeDescription> const& attributes,
-		size_t uniformBytes
+		size_t uniformBufferSize
 	);
 
-	template<typename Vertex>
+	void updateUniformBuffers(Uniform const& uniform);
+
 	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(
 		View<Vertex> const& vertices
 	) {

@@ -15,14 +15,9 @@ public:
 	~VulkanDrawCall();
 
 	void prepare();
-	
+	void setVertices(View<Vertex> const& vertices);
+
 	inline VkCommandBuffer const& swapchainCommandBuffer(size_t imageIndex) const {
 		return m_swapchainCommandBuffers[imageIndex];
-	}
-	
-	template<typename Vertex>
-	void setVertices(View<Vertex> const& vertices) {
-		m_vertexCount = vertices.count();
-		m_vertexBuffer = m_vulkanContext.createVertexBuffer(vertices);
 	}
 };

@@ -14,6 +14,11 @@ void VulkanDrawCall::prepare() {
 	);
 }
 
+void VulkanDrawCall::setVertices(View<Vertex> const& vertices) {
+	m_vertexCount = vertices.count();
+	m_vertexBuffer = m_vulkanContext.createVertexBuffer(vertices);
+}
+
 VulkanDrawCall::~VulkanDrawCall() {
 	auto [buf, mem] = m_vertexBuffer;
 	vkDestroyBuffer(m_vulkanContext.device(), buf, nullptr);

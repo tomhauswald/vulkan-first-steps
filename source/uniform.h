@@ -2,6 +2,6 @@
 
 #include <glm/glm.hpp>
 
-struct UniformMatrix {
+struct Uniform {
 	glm::mat4 mvp;
 };

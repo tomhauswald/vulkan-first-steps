@@ -1,5 +1,6 @@
 #include "vulkan_context.h"
-#include "vertex_formats.h"
+#include "vertex.h"
+#include "uniform.h"
 #include "vulkan_draw_call.h"
 
 #include <fstream>
@@ -237,7 +238,7 @@ void VulkanContext::createSwapchain(bool vsync) {
 		(surfaceCapabilities.maxImageCount != 0)
 		? (surfaceCapabilities.maxImageCount)
 		: (UINT32_MAX)
-	);
+		);
 
 	auto swapchainInfo = VkSwapchainCreateInfoKHR{};
 	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -256,26 +257,26 @@ void VulkanContext::createSwapchain(bool vsync) {
 		(vsync)
 		? (VK_PRESENT_MODE_FIFO_KHR)
 		: (VK_PRESENT_MODE_MAILBOX_KHR)
-	);
+		);
 
 	// Are graphics and presentation capabilities provided by the same queue family.
 	auto sameQFam = (uniqueElemCount(m_queueFamilyIndices) == 1);
-	
+
 	swapchainInfo.imageSharingMode = (
-		(sameQFam) 
+		(sameQFam)
 		? (VK_SHARING_MODE_EXCLUSIVE)
 		: (VK_SHARING_MODE_CONCURRENT)
-	);
-	
+		);
+
 	if (sameQFam) {
 		swapchainInfo.queueFamilyIndexCount = NUM_QUEUE_ROLES;
 		swapchainInfo.pQueueFamilyIndices = m_queueFamilyIndices.data();
 	}
 
 	crashIf(VK_SUCCESS != vkCreateSwapchainKHR(
-		m_device, 
-		&swapchainInfo, 
-		nullptr, 
+		m_device,
+		&swapchainInfo,
+		nullptr,
 		&m_swapchain
 	));
 
@@ -283,7 +284,7 @@ void VulkanContext::createSwapchain(bool vsync) {
 		&vkGetSwapchainImagesKHR,
 		m_device,
 		m_swapchain
-	);
+		);
 
 	m_swapchainImageViews = mapToVector<decltype(m_swapchainImages), VkImageView>(
 		m_swapchainImages,
@@ -350,7 +351,7 @@ void VulkanContext::accomodateWindow(GLFWwindow* window) {
 }
 
 std::vector<VkCommandBuffer> VulkanContext::recordCommands(
-	std::function<void(VkCommandBuffer)> const& vkCmdLambda
+	std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
 ) {
 	auto allocateInfo = VkCommandBufferAllocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -381,7 +382,7 @@ std::vector<VkCommandBuffer> VulkanContext::recordCommands(
 			vkCmdBeginRenderPass(cmdbufs[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
 				vkCmdBindPipeline(cmdbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-				vkCmdLambda(cmdbufs[i]);
+				vkCmdLambda(cmdbufs[i], i);
 			}
 			vkCmdEndRenderPass(cmdbufs[i]);
 		}
@@ -403,7 +404,7 @@ std::vector<VkCommandBuffer> VulkanContext::recordClearCommands(glm::vec3 const&
 	clearRect.layerCount = 1;
 	clearRect.rect.extent = m_windowExtent;
 
-	return recordCommands([&](VkCommandBuffer cmdbuf) {
+	return recordCommands([&](VkCommandBuffer cmdbuf, size_t) {
 		vkCmdClearAttachments(
 			cmdbuf,
 			1,
@@ -418,14 +419,27 @@ std::vector<VkCommandBuffer> VulkanContext::recordDrawCommands(
 	VkBuffer vertexBuffer, 
 	size_t vertexCount
 ) {
-	return recordCommands([&](VkCommandBuffer cmdbuf) {
+	return recordCommands([&](VkCommandBuffer cmdbuf, size_t imageIndex) {
+		
+		vkCmdBindDescriptorSets(
+			cmdbuf, 
+			VK_PIPELINE_BIND_POINT_GRAPHICS, 
+			m_pipelineLayout, 
+			0, 
+			1, 
+			&m_swapchainDescriptorSets[imageIndex], 
+			0, 
+			nullptr
+		);
+		
 		auto const offsetZero = VkDeviceSize{};
 		vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertexBuffer, &offsetZero);
+		
 		vkCmdDraw(cmdbuf, static_cast<uint32_t>(vertexCount), 1, 0, 0);
 	});
 }
 
-void VulkanContext::beginFrame() {
+void VulkanContext::onFrameBegin() {
 
 	vkAcquireNextImageKHR(
 		m_device,
@@ -437,7 +451,7 @@ void VulkanContext::beginFrame() {
 	);
 }
 
-void VulkanContext::endFrame() {
+void VulkanContext::onFrameDone() {
 
 	auto presentInfo = VkPresentInfoKHR{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -601,8 +615,12 @@ void VulkanContext::createPipeline(
 	std::string const& fragmentShaderName, 
 	VkVertexInputBindingDescription const& binding, 
 	std::vector<VkVertexInputAttributeDescription> const& attributes,
-	size_t uniformBytes
+	size_t uniformBufferSize
 ) {
+	m_vertexBinding = binding;
+	m_vertexAttributes = attributes;
+	m_uniformBufferSize = uniformBufferSize;
+
 	auto colorAttachments = std::array{
 		VkAttachmentDescription{
 			.format = VK_FORMAT_B8G8R8A8_SRGB,
@@ -755,6 +773,9 @@ void VulkanContext::createPipeline(
 	msaaState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	msaaState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+	if (!m_shaders.contains(vertexShaderName)) loadShader(vertexShaderName);
+	if (!m_shaders.contains(fragmentShaderName)) loadShader(fragmentShaderName);
+
 	auto stages = std::array{
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -805,12 +826,63 @@ void VulkanContext::createPipeline(
 		&m_pipeline
 	));
 
-	m_uniformBuffers.resize(m_swapchainImages.size());
-	for (auto i : range(m_uniformBuffers.size())) {
-		m_uniformBuffers[i] = createUniformBuffer(uniformBytes);
+	m_swapchainUniformBuffers.resize(m_swapchainImages.size());
+	for (auto i : range(m_swapchainUniformBuffers.size())) {
+		m_swapchainUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
 	}
 
-	m_clearCommandBuffers = recordClearCommands({ 0.39f, 0.58f, 0.93f });
+	// Create descriptor pool for uniform buffers.
+
+	auto descPoolSize = VkDescriptorPoolSize{};
+	descPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+
+	auto descPoolInfo = VkDescriptorPoolCreateInfo{};
+	descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	descPoolInfo.poolSizeCount = 1;
+	descPoolInfo.pPoolSizes = &descPoolSize;
+	descPoolInfo.maxSets = static_cast<uint32_t>(m_swapchainImages.size());
+
+	crashIf(VK_SUCCESS != vkCreateDescriptorPool(
+		m_device,
+		&descPoolInfo,
+		nullptr,
+		&m_descriptorPool
+	));
+
+	// Create descriptor set for uniform buffers.
+
+	auto descSetLayouts = std::vector<VkDescriptorSetLayout>(m_swapchainImages.size());
+	for (auto& layout : descSetLayouts) layout = m_setLayout;
+
+	auto descSetInfo = VkDescriptorSetAllocateInfo{};
+	descSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	descSetInfo.descriptorPool = m_descriptorPool;
+	descSetInfo.descriptorSetCount = static_cast<uint32_t>(m_swapchainImages.size());
+	descSetInfo.pSetLayouts = descSetLayouts.data();
+
+	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
+	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
+
+	for (auto i : range(m_swapchainImages.size())) {
+
+		auto uniformBufferInfo = VkDescriptorBufferInfo{};
+		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainUniformBuffers[i]);
+		uniformBufferInfo.offset = 0;
+		uniformBufferInfo.range = sizeof(Uniform);
+
+		auto uniformWriteInfo = VkWriteDescriptorSet{};
+		uniformWriteInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		uniformWriteInfo.descriptorCount = 1;
+		uniformWriteInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uniformWriteInfo.dstBinding = 0;
+		uniformWriteInfo.dstSet = m_swapchainDescriptorSets[i];
+		uniformWriteInfo.pBufferInfo = &uniformBufferInfo;
+
+		vkUpdateDescriptorSets(m_device, 1, &uniformWriteInfo, 0, nullptr);
+	}
+
+	m_swapchainClearCmdbufs = recordClearCommands({ 0.39f, 0.58f, 0.93f });
 
 	auto semaphoreInfo = VkSemaphoreCreateInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -830,10 +902,16 @@ void VulkanContext::createPipeline(
 	));
 }
 
+void VulkanContext::updateUniformBuffers(Uniform const& uniform) {
+	for (auto& [buf, mem] : m_swapchainUniformBuffers) {
+		writeToBuffer(mem, &uniform, sizeof(Uniform));
+	}
+}
+
 void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
 
 	auto cmdbufs = std::vector<VkCommandBuffer>(calls.size() + 1);
-	cmdbufs[0] = m_clearCommandBuffers[m_swapchainImageIndex];
+	cmdbufs[0] = m_swapchainClearCmdbufs[m_swapchainImageIndex];
 	for (size_t i = 0; i < calls.size(); ++i) {
 		cmdbufs[i + 1] = calls[i]->swapchainCommandBuffer(m_swapchainImageIndex);
 	}
@@ -869,11 +947,12 @@ VulkanContext::~VulkanContext() {
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
-	for (auto [buf, mem] : m_uniformBuffers) {
+	for (auto [buf, mem] : m_swapchainUniformBuffers) {
 		vkDestroyBuffer(m_device, buf, nullptr);
 		vkFreeMemory(m_device, mem, nullptr);
 	}
 
+	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
 	vkDestroyDescriptorSetLayout(m_device, m_setLayout, nullptr);
 	vkDestroyPipeline(m_device, m_pipeline, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);

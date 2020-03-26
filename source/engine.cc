@@ -1,16 +1,18 @@
 #include "renderer.h"
-#include "vertex_formats.h"
-#include "vertex_uniforms.h"
+
+struct EngineSettings {
+	RendererSettings renderer;
+};
 
 class Engine {
 private:
+	EngineSettings const& m_settings;
 	Renderer m_renderer;
 
 public:
-	template<typename Vertex, typename Uniform>
-	Engine& configureRenderer(RendererSettings const& settings) {
-		m_renderer.configure<Vertex, Uniform>(settings);
-		return *this;
+	Engine(EngineSettings const& settings) : 
+		m_settings{ settings }, 
+		m_renderer{ settings.renderer } {
 	}
 
 	void run() {
@@ -23,13 +25,12 @@ public:
 };
 
 int main() { 
-
-	Engine{}.configureRenderer<Vertex2dColored, UniformMatrix>({
-		.resolution = {1440, 900},
-		.vsyncEnabled = false,
-		.windowTitle = "Hello, Vulkan!",
-		.vertexShaderName = "vert-2d-colored",
-		.fragmentShaderName = "frag-unshaded"
+	Engine({
+		.renderer = {
+			.windowTitle = "Vulkan Renderer",
+			.resolution = {1440, 900},
+			.vsyncEnabled = false
+		}
 	}).run();
 
 	std::cout << "Press [ENTER] exit application..." << lf;

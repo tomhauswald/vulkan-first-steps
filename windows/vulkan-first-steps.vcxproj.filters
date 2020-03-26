@@ -35,9 +35,6 @@
     <ClInclude Include="..\source\renderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\vertex_formats.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\source\vulkan_context.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -47,7 +44,10 @@
     <ClInclude Include="..\source\view.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\vertex_uniforms.h">
+    <ClInclude Include="..\source\vertex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\uniform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
