@@ -59,7 +59,8 @@ private:
 	std::vector<VkFramebuffer> m_swapchainFramebuffers;
 	std::vector<VkDescriptorSet> m_swapchainDescriptorSets;
 	std::vector<VkCommandBuffer> m_swapchainClearCmdbufs;
-	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_swapchainUniformBuffers;
+	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_swapchainGlobalUniformBuffers;
+	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_swapchainInstanceUniformBuffers;
 
 	std::unordered_map<std::string, VkShaderModule> m_shaders;
 
@@ -136,7 +137,7 @@ public:
 		size_t uniformBufferSize
 	);
 
-	void updateUniformBuffers(Uniform const& uniform);
+	void updateGlobalUniformBuffers(Uniform::Global const& uniform);
 
 	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(
 		View<Vertex> const& vertices

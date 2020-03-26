@@ -12,24 +12,63 @@ void Renderer::initialize() {
 	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
 	
 	m_vulkanContext.createPipeline(
-		"vert-2d-colored"s,
+		"vert-colored"s,
 		"frag-unshaded"s,
 		Vertex::binding(),
 		Vertex::attributes(),
-		sizeof(Uniform)
+		sizeof(Uniform::Global)
 	);
 
-	prepareDrawCall("triangle1", makeInlineView<Vertex>({
-		{ {+0.0f, -0.5f}, {1.0f, 0.0f, 0.0f} },
-		{ {+0.5f, +0.5f}, {0.0f, 1.0f, 0.0f} },
-		{ {-0.5f, +0.5f}, {0.0f, 0.0f, 1.0f} }
+	prepareDrawCall("cube", makeInlineView<Vertex>({
+	
+		{ {-1, +1, +1}, {0,0,1} },
+		{ {+1, +1, +1}, {0,0,1} },
+		{ {+1, -1, +1}, {0,0,1} },
+		{ {+1, -1, +1}, {0,0,1} },
+		{ {-1, -1, +1}, {0,0,1} },
+		{ {-1, +1, +1}, {0,0,1} },
+
+		{ {-1, +1, -1}, {0,1,1} },
+		{ {-1, +1, +1}, {0,1,1} },
+		{ {-1, -1, +1}, {0,1,1} },
+		{ {-1, -1, +1}, {0,1,1} },
+		{ {-1, -1, -1}, {0,1,1} },
+		{ {-1, +1, -1}, {0,1,1} },
+		
+		{ {+1, +1, +1}, {1,0,0} },
+		{ {+1, +1, -1}, {1,0,0} },
+		{ {+1, -1, -1}, {1,0,0} },
+		{ {+1, -1, -1}, {1,0,0} },
+		{ {+1, -1, +1}, {1,0,0} },
+		{ {+1, +1, +1}, {1,0,0} },
+		
+		{ {+1, +1, -1}, {1,1,0} },
+		{ {-1, +1, -1}, {1,1,0} },
+		{ {-1, -1, -1}, {1,1,0} },
+		{ {-1, -1, -1}, {1,1,0} },
+		{ {+1, -1, -1}, {1,1,0} },
+		{ {+1, +1, -1}, {1,1,0} },
+		
+		{ {-1, +1, -1}, {0,1,0} },
+		{ {+1, +1, -1}, {0,1,0} },
+		{ {+1, +1, +1}, {0,1,0} },
+		{ {+1, +1, +1}, {0,1,0} },
+		{ {-1, +1, +1}, {0,1,0} },
+		{ {-1, +1, -1}, {0,1,0} },
+		
+		{ {-1, -1, +1}, {1,0,1} },
+		{ {+1, -1, +1}, {1,0,1} },
+		{ {+1, -1, -1}, {1,0,1} },
+		{ {+1, -1, -1}, {1,0,1} },
+		{ {-1, -1, -1}, {1,0,1} },
+		{ {-1, -1, +1}, {1,0,1} },
 	}));
 
-	prepareDrawCall("triangle2", makeInlineView<Vertex>({
-		{ {+0.5f, -0.5f}, {1.0f, 0.0f, 0.0f} },
-		{ {+1.0f, +0.5f}, {0.0f, 1.0f, 0.0f} },
-		{ {+0.0f, +0.5f}, {0.0f, 0.0f, 1.0f} }
-		}));
+	prepareDrawCall("r", makeInlineView<Vertex>({
+		{ { 5, -1,  0}, {1,0,0} },
+		{ { 6,  1,  0}, {1,0,0} },
+		{ { 7, -1,  0}, {1,0,0} },
+	}));
 
 	glfwShowWindow(m_pWindow);
 }
@@ -66,28 +105,36 @@ void Renderer::handleWindowEvents() {
 }
 
 void Renderer::renderScene(Scene const& scene) {
-	static auto frame = size_t{ 0 };
+	[[maybe_unused]] static auto frame = size_t{ 0 };
 
 	(void)scene;
 
-	auto model = glm::rotate(glm::mat4{ 1 }, frame++ / 1000.0f, { 0,0,1 });
-	auto view  = glm::lookAt(glm::vec3{ 2,2,2 }, { 0,0,0 }, { 0,1,0 });
+	auto model = glm::rotate(glm::mat4{1}, frame++ / 2000.0f, {1,1,0});
+	auto view  = glm::lookAt(glm::vec3{0,0,10}, {0,0,0}, {0,1,0});
 	auto proj  = glm::perspective(
-		3.14f / 4.0f,
+		glm::radians(45.0f),
 		m_settings.resolution.x / (float)m_settings.resolution.y,
 		0.0001f,
 		1000.0f
 	);
+	proj[1][1] *= -1.0f;
 
-	setUniformData({ proj * view * model });
 	
-	auto calls = std::vector<VulkanDrawCall const*>{};
-	for (auto name : { "triangle1", "triangle2" }) {
-		calls.push_back(m_preparedDrawCalls.at(name).get());
-	}
-
 	m_vulkanContext.onFrameBegin();	
-	m_vulkanContext.execute(calls);
+	
+	auto globalUniformData = Uniform::Global{};
+	globalUniformData.viewMatrix = view;
+	globalUniformData.projectionMatrix = proj;
+
+	setGlobalUniformData(globalUniformData);
+	
+	auto perInstanceUniformData = Uniform::PerInstance{};
+	perInstanceUniformData.modelMatrix = model;
+
+	m_vulkanContext.execute({
+		m_preparedDrawCalls.at("cube").get(),
+	});	
+	
 	m_vulkanContext.onFrameDone();
 }
 
@@ -98,8 +145,8 @@ void Renderer::prepareDrawCall(std::string const& name, View<Vertex> vertices) {
 	m_preparedDrawCalls[name] = std::move(call);
 }
 
-void Renderer::setUniformData(Uniform const& uniform) {
-	m_vulkanContext.updateUniformBuffers(uniform);
+void Renderer::setGlobalUniformData(Uniform::Global const& uniform) {
+	m_vulkanContext.updateGlobalUniformBuffers(uniform);
 }
 
 Renderer::Renderer(RendererSettings const& settings)

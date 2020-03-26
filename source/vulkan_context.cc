@@ -427,7 +427,7 @@ std::vector<VkCommandBuffer> VulkanContext::recordDrawCommands(
 			m_pipelineLayout, 
 			0, 
 			1, 
-			&m_swapchainDescriptorSets[imageIndex], 
+			&m_swapchainDescriptorSets[imageIndex],
 			0, 
 			nullptr
 		);
@@ -711,16 +711,22 @@ void VulkanContext::createPipeline(
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-	auto setLayoutBinding = VkDescriptorSetLayoutBinding{};
-	setLayoutBinding.binding = 0;
-	setLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	setLayoutBinding.descriptorCount = 1;
-	setLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	auto globalUniformBinding = VkDescriptorSetLayoutBinding{};
+	globalUniformBinding.binding = 0;
+	globalUniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	globalUniformBinding.descriptorCount = 1;
+	globalUniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	
+	auto instanceUniformBinding = VkDescriptorSetLayoutBinding{};
+	instanceUniformBinding.binding = 1;
+	instanceUniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	instanceUniformBinding.descriptorCount = 1;
+	instanceUniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{};
 	setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setLayoutInfo.bindingCount = 1;
-	setLayoutInfo.pBindings = &setLayoutBinding;
+	setLayoutInfo.bindingCount = 2;
+	setLayoutInfo.pBindings = std::data({globalUniformBinding, instanceUniformBinding});
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
 		m_device,
@@ -831,22 +837,29 @@ void VulkanContext::createPipeline(
 		&m_pipeline
 	));
 
-	m_swapchainUniformBuffers.resize(m_swapchainImages.size());
-	for (auto i : range(m_swapchainUniformBuffers.size())) {
-		m_swapchainUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
+	m_swapchainGlobalUniformBuffers.resize(m_swapchainImages.size());
+	for (auto i : range(m_swapchainImages.size())) {
+		m_swapchainGlobalUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
 	}
 
 	// Create descriptor pool for uniform buffers.
 
-	auto descPoolSize = VkDescriptorPoolSize{};
-	descPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+	auto descPoolSize = std::array{
+		VkDescriptorPoolSize{
+			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size())
+		},
+		VkDescriptorPoolSize{
+			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+			.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size())
+		}
+	};
 
 	auto descPoolInfo = VkDescriptorPoolCreateInfo{};
 	descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	descPoolInfo.poolSizeCount = 1;
-	descPoolInfo.pPoolSizes = &descPoolSize;
-	descPoolInfo.maxSets = static_cast<uint32_t>(m_swapchainImages.size());
+	descPoolInfo.poolSizeCount = 2;
+	descPoolInfo.pPoolSizes = descPoolSize.data();
+	descPoolInfo.maxSets = 2 * static_cast<uint32_t>(m_swapchainImages.size());
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorPool(
 		m_device,
@@ -865,16 +878,16 @@ void VulkanContext::createPipeline(
 	descSetInfo.descriptorPool = m_descriptorPool;
 	descSetInfo.descriptorSetCount = static_cast<uint32_t>(m_swapchainImages.size());
 	descSetInfo.pSetLayouts = descSetLayouts.data();
-
+	
 	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
 	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
 
 	for (auto i : range(m_swapchainImages.size())) {
 
 		auto uniformBufferInfo = VkDescriptorBufferInfo{};
-		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainUniformBuffers[i]);
+		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainGlobalUniformBuffers[i]);
 		uniformBufferInfo.offset = 0;
-		uniformBufferInfo.range = sizeof(Uniform);
+		uniformBufferInfo.range = m_uniformBufferSize;
 
 		auto uniformWriteInfo = VkWriteDescriptorSet{};
 		uniformWriteInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -907,9 +920,9 @@ void VulkanContext::createPipeline(
 	));
 }
 
-void VulkanContext::updateUniformBuffers(Uniform const& uniform) {
-	for (auto& [buf, mem] : m_swapchainUniformBuffers) {
-		writeToBuffer(mem, &uniform, sizeof(Uniform));
+void VulkanContext::updateGlobalUniformBuffers(Uniform::Global const& uniform) {
+	for (auto& [buf, mem] : m_swapchainGlobalUniformBuffers) {
+		writeToBuffer(mem, &uniform, sizeof(uniform));
 	}
 }
 
@@ -952,7 +965,7 @@ VulkanContext::~VulkanContext() {
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
-	for (auto [buf, mem] : m_swapchainUniformBuffers) {
+	for (auto [buf, mem] : m_swapchainGlobalUniformBuffers) {
 		vkDestroyBuffer(m_device, buf, nullptr);
 		vkFreeMemory(m_device, mem, nullptr);
 	}

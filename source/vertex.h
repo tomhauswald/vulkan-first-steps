@@ -59,14 +59,17 @@ auto describeVertexInputAttributes(uint32_t binding) {
 
 struct Vertex {
 	
-	glm::vec2 pos;
-	glm::vec3 rgb;
+	glm::vec3 position;
+	glm::vec3 color;
 
 	static inline auto binding() {
 		return describeVertexInputBinding<Vertex>(0);
 	}
 
 	static inline auto attributes() {
-		return describeVertexInputAttributes<glm::vec2, glm::vec3>(0); 
+		return describeVertexInputAttributes<
+			glm::vec3, 
+			glm::vec3
+		>(0); 
 	}
 };

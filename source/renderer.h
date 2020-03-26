@@ -35,5 +35,5 @@ public:
 	void handleWindowEvents();
 	void renderScene(Scene const& scene);
 	void prepareDrawCall(std::string const& name, View<Vertex> vertices);
-	void setUniformData(Uniform const& uniform);
+	void setGlobalUniformData(Uniform::Global const& uniform);
 };
