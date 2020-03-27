@@ -380,7 +380,8 @@ void VulkanContext::recordCommandBuffers() {
 
 		crashIf(vkBeginCommandBuffer(commandBuffer, &cmdbufBeginInfo) != VK_SUCCESS);
 		{
-			auto clearValue = VkClearValue{ 0.39f, 0.58f, 0.93f };
+			auto clearValue = VkClearValue{};
+		        clearValue.color = {{ 0.39f, 0.58f, 0.93f }};
 		
 			auto passBeginInfo = VkRenderPassBeginInfo{};
 			passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
