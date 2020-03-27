@@ -22,7 +22,7 @@
     <ClCompile Include="..\source\engine.cc" />
     <ClCompile Include="..\source\renderer.cc" />
     <ClCompile Include="..\source\vulkan_context.cc" />
-    <ClCompile Include="..\source\vulkan_draw_call.cc" />
+    <ClCompile Include="..\source\draw_call.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\common.h" />
@@ -31,7 +31,7 @@
     <ClInclude Include="..\source\uniform.h" />
     <ClInclude Include="..\source\view.h" />
     <ClInclude Include="..\source\vulkan_context.h" />
-    <ClInclude Include="..\source\vulkan_draw_call.h" />
+    <ClInclude Include="..\source\draw_call.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

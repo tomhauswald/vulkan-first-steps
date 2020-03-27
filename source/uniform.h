@@ -2,15 +2,11 @@
 
 #include <glm/glm.hpp>
 
-namespace Uniform {
-
-struct Global {
+struct UniformData {
 	glm::mat4 viewMatrix;
 	glm::mat4 projectionMatrix;
 };
 
-struct PerInstance {
+struct PushConstantData {
 	glm::mat4 modelMatrix;
-};
-
 };

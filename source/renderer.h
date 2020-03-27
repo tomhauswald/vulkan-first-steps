@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vulkan_context.h"
-#include "vulkan_draw_call.h"
+#include "draw_call.h"
 #include "view.h"
 
 struct Scene { };
@@ -21,8 +21,8 @@ private:
 
 	std::unordered_map<
 		std::string, 
-		std::unique_ptr<VulkanDrawCall>
-	> m_preparedDrawCalls;
+		std::unique_ptr<DrawCall>
+	> m_drawCalls;
 
 	void createWindow();
 
@@ -34,6 +34,15 @@ public:
 	bool isWindowOpen() const;
 	void handleWindowEvents();
 	void renderScene(Scene const& scene);
-	void prepareDrawCall(std::string const& name, View<Vertex> vertices);
-	void setGlobalUniformData(Uniform::Global const& uniform);
+	
+	inline auto& createDrawCall(std::string const& name) {
+		m_drawCalls.emplace(name, std::make_unique<DrawCall>(m_vulkanContext));
+		return *m_drawCalls.at(name);
+	}
+	
+	inline auto& getDrawCall(std::string const& name) {
+		return *m_drawCalls.at(name);
+	}
+
+	void setUniformData(UniformData const& data);
 };

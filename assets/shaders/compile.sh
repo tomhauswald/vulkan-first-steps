@@ -1,4 +1,5 @@
 #!/bin/bash
+rm -rf spirv
 mkdir -p spirv
 for ext in vert frag; do
 	files=*.${ext}

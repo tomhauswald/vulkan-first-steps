@@ -1,7 +1,7 @@
 #include "vulkan_context.h"
 #include "vertex.h"
 #include "uniform.h"
-#include "vulkan_draw_call.h"
+#include "draw_call.h"
 
 #include <fstream>
 
@@ -216,6 +216,7 @@ void VulkanContext::createDevice() {
 	auto poolInfo = VkCommandPoolCreateInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	crashIf(VK_SUCCESS != vkCreateCommandPool(
 		m_device,
@@ -350,96 +351,72 @@ void VulkanContext::accomodateWindow(GLFWwindow* window) {
 	crashIf(glfwCreateWindowSurface(m_instance, window, nullptr, &m_windowSurface) != VK_SUCCESS);
 }
 
-std::vector<VkCommandBuffer> VulkanContext::recordCommands(
-	std::function<void(VkCommandBuffer, size_t)> const& vkCmdLambda
-) {
-	auto allocateInfo = VkCommandBufferAllocateInfo{};
-	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocateInfo.commandPool = m_commandPool;
-	allocateInfo.commandBufferCount = m_swapchainImages.size();
+void VulkanContext::recordCommandBuffers() {
 
-	auto swapchainImageCount = m_swapchainImages.size();
+	// @refactor Initial allocation of command buffers.
+	if (m_swapchainCommandBuffers.size() == 0) {
+		
+		auto allocateInfo = VkCommandBufferAllocateInfo{};
+		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocateInfo.commandPool = m_commandPool;
+		allocateInfo.commandBufferCount = m_swapchainImages.size();
 
-	auto cmdbufs = std::vector<VkCommandBuffer>(swapchainImageCount);
-	crashIf(vkAllocateCommandBuffers(m_device, &allocateInfo, cmdbufs.data()) != VK_SUCCESS);
+		m_swapchainCommandBuffers.resize(m_swapchainImages.size());
+		crashIf(VK_SUCCESS != vkAllocateCommandBuffers(
+			m_device, 
+			&allocateInfo, 
+			m_swapchainCommandBuffers.data()
+		));
+	}
 
-	for (size_t i = 0; i < swapchainImageCount; ++i) {
+	for (size_t imageIndex = 0; imageIndex < m_swapchainImages.size(); ++imageIndex) {
+
+		auto& commandBuffer = m_swapchainCommandBuffers[imageIndex];
+		auto& framebuffer   = m_swapchainFramebuffers[imageIndex];
+		auto& descriptorSet = m_swapchainDescriptorSets[imageIndex];
 
 		auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
 		cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		crashIf(vkBeginCommandBuffer(cmdbufs[i], &cmdbufBeginInfo) != VK_SUCCESS);
+		crashIf(vkBeginCommandBuffer(commandBuffer, &cmdbufBeginInfo) != VK_SUCCESS);
 		{
-			auto clearValue = VkClearValue{};
+			auto clearValue = VkClearValue{ 0.39f, 0.58f, 0.93f };
+		
 			auto passBeginInfo = VkRenderPassBeginInfo{};
 			passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-			passBeginInfo.framebuffer = m_swapchainFramebuffers[i];
+			passBeginInfo.framebuffer = framebuffer;
 			passBeginInfo.clearValueCount = 1;
 			passBeginInfo.pClearValues = &clearValue;
 			passBeginInfo.renderPass = m_renderPass;
 			passBeginInfo.renderArea.extent = m_windowExtent;
 
-			vkCmdBeginRenderPass(cmdbufs[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(commandBuffer, &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
-				vkCmdBindPipeline(cmdbufs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-				vkCmdLambda(cmdbufs[i], i);
+				vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+				
+				// Bind the uniform buffer of the current frame.
+				vkCmdBindDescriptorSets(
+					commandBuffer,
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					m_pipelineLayout,
+					0,
+					1,
+					&descriptorSet,
+					0,
+					nullptr
+				); 
+
+				for (auto const* dc : m_queuedDrawCalls) {
+					dc->appendToCommandBuffer(commandBuffer);
+				}
 			}
-			vkCmdEndRenderPass(cmdbufs[i]);
+			vkCmdEndRenderPass(commandBuffer);
 		}
-		crashIf(vkEndCommandBuffer(cmdbufs[i]) != VK_SUCCESS);
+		crashIf(vkEndCommandBuffer(commandBuffer) != VK_SUCCESS);
 	}
-
-	return cmdbufs;
 }
 
-std::vector<VkCommandBuffer> VulkanContext::recordClearCommands(glm::vec3 const& color) {
-	
-	auto colorAttachment = VkClearAttachment{};
-	colorAttachment.colorAttachment = 0;
-	colorAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	colorAttachment.clearValue.color = { .float32 = { color.r, color.g, color.b, 0.0f } };
-
-	auto clearRect = VkClearRect{};
-	clearRect.baseArrayLayer = 0;
-	clearRect.layerCount = 1;
-	clearRect.rect.extent = m_windowExtent;
-
-	return recordCommands([&](VkCommandBuffer cmdbuf, size_t) {
-		vkCmdClearAttachments(
-			cmdbuf,
-			1,
-			&colorAttachment,
-			1,
-			&clearRect
-		);
-	});
-}
-
-std::vector<VkCommandBuffer> VulkanContext::recordDrawCommands(
-	VkBuffer vertexBuffer, 
-	size_t vertexCount
-) {
-	return recordCommands([&](VkCommandBuffer cmdbuf, size_t imageIndex) {
-		
-		vkCmdBindDescriptorSets(
-			cmdbuf, 
-			VK_PIPELINE_BIND_POINT_GRAPHICS, 
-			m_pipelineLayout, 
-			0, 
-			1, 
-			&m_swapchainDescriptorSets[imageIndex],
-			0, 
-			nullptr
-		);
-		
-		auto const offsetZero = VkDeviceSize{};
-		vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vertexBuffer, &offsetZero);
-		
-		vkCmdDraw(cmdbuf, static_cast<uint32_t>(vertexCount), 1, 0, 0);
-	});
-}
-
-void VulkanContext::onFrameBegin() {
+void VulkanContext::prepareFrame() {
 
 	vkAcquireNextImageKHR(
 		m_device,
@@ -449,9 +426,35 @@ void VulkanContext::onFrameBegin() {
 		VK_NULL_HANDLE,
 		&m_swapchainImageIndex
 	);
+
+	m_queuedDrawCalls.clear();
 }
 
-void VulkanContext::onFrameDone() {
+void VulkanContext::queueDrawCall(DrawCall const& call) {
+	m_queuedDrawCalls.push_back(&call);
+}
+
+void VulkanContext::finalizeFrame() {
+
+	recordCommandBuffers();
+
+	auto stage = VkPipelineStageFlags{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	auto submitInfo = VkSubmitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = m_swapchainImages.size();
+	submitInfo.pCommandBuffers = m_swapchainCommandBuffers.data();
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitDstStageMask = &stage;
+	submitInfo.pWaitSemaphores = &m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE];
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &m_semaphores[RENDER_EVENT_FRAME_DONE];
+
+	crashIf(VK_SUCCESS != vkQueueSubmit(
+		m_queues[QUEUE_ROLE_GRAPHICS],
+		1,
+		&submitInfo,
+		VK_NULL_HANDLE
+	));
 
 	auto presentInfo = VkPresentInfoKHR{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -615,17 +618,19 @@ void VulkanContext::createPipeline(
 	std::string const& fragmentShaderName, 
 	VkVertexInputBindingDescription const& binding, 
 	std::vector<VkVertexInputAttributeDescription> const& attributes,
-	size_t uniformBufferSize
+	size_t uniformBufferSize,
+	size_t pushConstantSize
 ) {
 	m_vertexBinding = binding;
 	m_vertexAttributes = attributes;
 	m_uniformBufferSize = uniformBufferSize;
+	m_pushConstantSize = pushConstantSize;
 
 	auto colorAttachments = std::array{
 		VkAttachmentDescription{
 			.format = VK_FORMAT_B8G8R8A8_SRGB,
 			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -711,22 +716,16 @@ void VulkanContext::createPipeline(
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-	auto globalUniformBinding = VkDescriptorSetLayoutBinding{};
-	globalUniformBinding.binding = 0;
-	globalUniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	globalUniformBinding.descriptorCount = 1;
-	globalUniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	auto uniformBinding = VkDescriptorSetLayoutBinding{};
+	uniformBinding.binding = 0;
+	uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uniformBinding.descriptorCount = 1;
+	uniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	
-	auto instanceUniformBinding = VkDescriptorSetLayoutBinding{};
-	instanceUniformBinding.binding = 1;
-	instanceUniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	instanceUniformBinding.descriptorCount = 1;
-	instanceUniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
 	auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{};
 	setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setLayoutInfo.bindingCount = 2;
-	setLayoutInfo.pBindings = std::data({globalUniformBinding, instanceUniformBinding});
+	setLayoutInfo.bindingCount = 1;
+	setLayoutInfo.pBindings = &uniformBinding;
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
 		m_device,
@@ -802,10 +801,17 @@ void VulkanContext::createPipeline(
 		}
 	};
 
+	auto pushConstantRange = VkPushConstantRange{};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = m_pushConstantSize;
+
 	auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &m_setLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
 		m_device, 
@@ -837,29 +843,22 @@ void VulkanContext::createPipeline(
 		&m_pipeline
 	));
 
-	m_swapchainGlobalUniformBuffers.resize(m_swapchainImages.size());
+	m_swapchainUniformBuffers.resize(m_swapchainImages.size());
 	for (auto i : range(m_swapchainImages.size())) {
-		m_swapchainGlobalUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
+		m_swapchainUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
 	}
 
 	// Create descriptor pool for uniform buffers.
 
-	auto descPoolSize = std::array{
-		VkDescriptorPoolSize{
-			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size())
-		},
-		VkDescriptorPoolSize{
-			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-			.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size())
-		}
-	};
+	auto descPoolSize = VkDescriptorPoolSize{};
+	descPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
 
 	auto descPoolInfo = VkDescriptorPoolCreateInfo{};
 	descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	descPoolInfo.poolSizeCount = 2;
-	descPoolInfo.pPoolSizes = descPoolSize.data();
-	descPoolInfo.maxSets = 2 * static_cast<uint32_t>(m_swapchainImages.size());
+	descPoolInfo.poolSizeCount = 1;
+	descPoolInfo.pPoolSizes = &descPoolSize;
+	descPoolInfo.maxSets = static_cast<uint32_t>(m_swapchainImages.size());
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorPool(
 		m_device,
@@ -868,16 +867,13 @@ void VulkanContext::createPipeline(
 		&m_descriptorPool
 	));
 
-	// Create descriptor set for uniform buffers.
-
-	auto descSetLayouts = std::vector<VkDescriptorSetLayout>(m_swapchainImages.size());
-	for (auto& layout : descSetLayouts) layout = m_setLayout;
-
+	// Create descriptor sets for the uniform buffers.
 	auto descSetInfo = VkDescriptorSetAllocateInfo{};
 	descSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	descSetInfo.descriptorPool = m_descriptorPool;
 	descSetInfo.descriptorSetCount = static_cast<uint32_t>(m_swapchainImages.size());
-	descSetInfo.pSetLayouts = descSetLayouts.data();
+	auto a = repeat(m_setLayout, m_swapchainImages.size()); 
+	descSetInfo.pSetLayouts = a.data();
 	
 	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
 	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
@@ -885,22 +881,20 @@ void VulkanContext::createPipeline(
 	for (auto i : range(m_swapchainImages.size())) {
 
 		auto uniformBufferInfo = VkDescriptorBufferInfo{};
-		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainGlobalUniformBuffers[i]);
+		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainUniformBuffers[i]);
 		uniformBufferInfo.offset = 0;
 		uniformBufferInfo.range = m_uniformBufferSize;
 
-		auto uniformWriteInfo = VkWriteDescriptorSet{};
-		uniformWriteInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		uniformWriteInfo.descriptorCount = 1;
-		uniformWriteInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		uniformWriteInfo.dstBinding = 0;
-		uniformWriteInfo.dstSet = m_swapchainDescriptorSets[i];
-		uniformWriteInfo.pBufferInfo = &uniformBufferInfo;
+		auto writeInfo = VkWriteDescriptorSet{};
+		writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeInfo.descriptorCount = 1;
+		writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writeInfo.dstBinding = 0;
+		writeInfo.dstSet = m_swapchainDescriptorSets[i];
+		writeInfo.pBufferInfo = &uniformBufferInfo;
 
-		vkUpdateDescriptorSets(m_device, 1, &uniformWriteInfo, 0, nullptr);
+		vkUpdateDescriptorSets(m_device, 1, &writeInfo, 0, nullptr);
 	}
-
-	m_swapchainClearCmdbufs = recordClearCommands({ 0.39f, 0.58f, 0.93f });
 
 	auto semaphoreInfo = VkSemaphoreCreateInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -920,37 +914,10 @@ void VulkanContext::createPipeline(
 	));
 }
 
-void VulkanContext::updateGlobalUniformBuffers(Uniform::Global const& uniform) {
-	for (auto& [buf, mem] : m_swapchainGlobalUniformBuffers) {
-		writeToBuffer(mem, &uniform, sizeof(uniform));
+void VulkanContext::updateUniformData(UniformData const& data) {
+	for (auto [buf, mem] : m_swapchainUniformBuffers) {
+		writeToBuffer(mem, &data, sizeof(UniformData));
 	}
-}
-
-void VulkanContext::execute(std::vector<VulkanDrawCall const*> const& calls) {
-
-	auto cmdbufs = std::vector<VkCommandBuffer>(calls.size() + 1);
-	cmdbufs[0] = m_swapchainClearCmdbufs[m_swapchainImageIndex];
-	for (size_t i = 0; i < calls.size(); ++i) {
-		cmdbufs[i + 1] = calls[i]->swapchainCommandBuffer(m_swapchainImageIndex);
-	}
-
-	auto stage = VkPipelineStageFlags{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	auto submitInfo = VkSubmitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = cmdbufs.size();
-	submitInfo.pCommandBuffers = cmdbufs.data();
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitDstStageMask = &stage;
-	submitInfo.pWaitSemaphores = &m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE];
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &m_semaphores[RENDER_EVENT_FRAME_DONE];
-
-	crashIf(VK_SUCCESS != vkQueueSubmit(
-		m_queues[QUEUE_ROLE_GRAPHICS],
-		1,
-		&submitInfo,
-		VK_NULL_HANDLE
-	));
 }
 
 VulkanContext::~VulkanContext() {
@@ -965,7 +932,7 @@ VulkanContext::~VulkanContext() {
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
-	for (auto [buf, mem] : m_swapchainGlobalUniformBuffers) {
+	for (auto [buf, mem] : m_swapchainUniformBuffers) {
 		vkDestroyBuffer(m_device, buf, nullptr);
 		vkFreeMemory(m_device, mem, nullptr);
 	}

@@ -96,12 +96,21 @@ bool contains(
 // Constructs a vector containing the values [0,...,count).
 template<typename Elem=size_t>
 std::vector<Elem> range(size_t count) {
-	std::vector<Elem> r;
-	r.resize(count);
-	for(size_t i=0; i<count; ++i) {
-		r[i] = static_cast<Elem>(i);
+	auto vec = std::vector<Elem>(count);
+	for (size_t i = 0; i < count; ++i) {
+		vec[i] = static_cast<Elem>(i);
 	}
-	return std::move(r);
+	return vec;
+}
+
+// Constructs a vector containing the same value repeatedly.
+template<typename Elem>
+std::vector<Elem> repeat(Elem const& value, size_t times) {
+	auto vec = std::vector<Elem>(times);
+	for (size_t i = 0; i < times; ++i) {
+		vec[i] = value;
+	}
+	return vec;
 }
 
 template<typename Container>
