@@ -61,6 +61,8 @@ private:
 	std::vector<VkFence> m_swapchainFences;
 	uint32_t m_swapchainImageIndex; // <- Index into resource arrays.
 
+	std::tuple<VkImage, VkImageView, VkDeviceMemory> m_depthBuffer;
+	
 	std::unordered_map<std::string, VkShaderModule> m_shaders;
 
 	VkVertexInputBindingDescription m_vertexBinding;
@@ -110,7 +112,7 @@ public:
 	void createInstance();
 	void selectPhysicalDevice();
 	void createDevice();
-	void createSwapchain(size_t numImages, bool vsync);
+	void createSwapchain(bool vsync);
 	
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);

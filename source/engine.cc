@@ -31,8 +31,7 @@ int main() {
 		.renderer = {
 			.windowTitle = "Vulkan Renderer",
 			.resolution = {1440, 900},
-			.vsyncEnabled = false,
-			.numSwapchainImages = SIZE_MAX
+			.vsyncEnabled = false
 		}
 	}).run();
 

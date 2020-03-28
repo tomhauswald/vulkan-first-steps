@@ -10,7 +10,6 @@ struct RendererSettings {
 	std::string windowTitle;
 	glm::uvec2 resolution;
 	bool vsyncEnabled;
-	size_t numSwapchainImages;
 };
 
 class Renderer {

@@ -10,12 +10,7 @@ void Renderer::initialize() {
 	m_vulkanContext.accomodateWindow(m_pWindow);
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
-	
-	m_vulkanContext.createSwapchain(
-		m_settings.numSwapchainImages,
-		m_settings.vsyncEnabled
-	);
-	
+	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
 	m_vulkanContext.createPipeline(
 		"vert-colored"s,
 		"frag-unshaded"s,
@@ -131,20 +126,24 @@ void Renderer::renderScene(Scene const& scene) {
 	);
 	setUniformData(uniformData);
 
-	for (int y = -1; y <= 1; ++y) {
-		for (int x = -1; x <= 1; ++x) {
+	for (int z = -1; z <= 1; ++z ) {
+		for (int y = -1; y <= 1; ++y) {
+			for (int x = -1; x <= 1; ++x) {
 
-			auto modelMatrix = glm::translate(
-				glm::vec3{ x * 3.0f, y * 3.0f, 0.0f }
-			);
+				auto modelMatrix = glm::translate(
+					glm::vec3{ x * 3.0f, y * 3.0f, z * 3.0f }
+				);
 
-			modelMatrix *= glm::rotate(
-				glm::mat4{ 1.0f },
-				time.count(),
-				{ x, y, 1.0f }
-			);
-
-			getMesh("cube").render({ modelMatrix });
+				if(x || y || z) {
+					modelMatrix *= glm::rotate(
+						glm::mat4{ 1.0f },
+						time.count(),
+						{ x, y, z }
+					);
+				}
+				
+				getMesh("cube").render({ modelMatrix });
+			}
 		}
 	}
 
