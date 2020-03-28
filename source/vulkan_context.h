@@ -110,7 +110,7 @@ public:
 	void createInstance();
 	void selectPhysicalDevice();
 	void createDevice();
-	void createSwapchain(bool vsync);
+	void createSwapchain(size_t numImages, bool vsync);
 	
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);

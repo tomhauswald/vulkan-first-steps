@@ -37,7 +37,15 @@ public:
 	std::vector<Vertex> const& vertices() const { return m_vertices; }
 
 	void setVertices(std::vector<Vertex> const& vertices) { 
+		
+		// Wait for all frames in flight to be delivered before updating
+		// the vertex data.
+		vkDeviceWaitIdle(m_context.device());
+		
+		// Free previous buffer resources, if any.
 		releaseBuffers();
+
+		// Create new buffer resources.
 		m_vertices = vertices; 
 		auto [buf, mem] = m_context.createVertexBuffer(m_vertices);
 		m_vertexBuffer = buf;

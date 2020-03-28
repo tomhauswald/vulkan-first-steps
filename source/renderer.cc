@@ -10,7 +10,11 @@ void Renderer::initialize() {
 	m_vulkanContext.accomodateWindow(m_pWindow);
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
-	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
+	
+	m_vulkanContext.createSwapchain(
+		m_settings.numSwapchainImages,
+		m_settings.vsyncEnabled
+	);
 	
 	m_vulkanContext.createPipeline(
 		"vert-colored"s,
@@ -102,15 +106,14 @@ void Renderer::handleWindowEvents() {
 
 void Renderer::renderScene(Scene const& scene) {
 
-	static const auto launchTime = std::chrono::high_resolution_clock::now();
 	static auto time = std::chrono::duration<float>{};
 	static auto dt = std::chrono::duration<float>{};
 	static auto frameTimeAccum = std::chrono::duration<float>{};
 	static auto numFrames = size_t{};
 
-	auto frameStartTime = std::chrono::high_resolution_clock::now();
-	
 	(void)scene;
+
+	auto frameStartTime = std::chrono::high_resolution_clock::now();
 	
 	m_vulkanContext.onFrameBegin();	
 	
@@ -128,19 +131,19 @@ void Renderer::renderScene(Scene const& scene) {
 	);
 	setUniformData(uniformData);
 
-	for(int y=-1; y<=1; ++y) {
-		for(int x=-1; x<=1; ++x) {
+	for (int y = -1; y <= 1; ++y) {
+		for (int x = -1; x <= 1; ++x) {
 
 			auto modelMatrix = glm::translate(
-				glm::vec3{ x * 2.5f, y * 2.5f, 0.0f }
+				glm::vec3{ x * 3.0f, y * 3.0f, 0.0f }
 			);
-			
+
 			modelMatrix *= glm::rotate(
 				glm::mat4{ 1.0f },
 				time.count(),
 				{ x, y, 1.0f }
 			);
-			
+
 			getMesh("cube").render({ modelMatrix });
 		}
 	}
@@ -153,10 +156,8 @@ void Renderer::renderScene(Scene const& scene) {
 	numFrames++;
 	frameTimeAccum += dt;
 	
-	if(frameTimeAccum.count() >= 1.0f) {
-		std::stringstream ss;
-		ss << "FPS: " << numFrames / frameTimeAccum.count();
-		glfwSetWindowTitle(m_pWindow, ss.str().c_str());
+	if(frameTimeAccum.count() >= 5.0f) {
+		std::cout << "FPS: " << numFrames / frameTimeAccum.count() << lf;
 		numFrames = 0;
 		frameTimeAccum = {};
 	}

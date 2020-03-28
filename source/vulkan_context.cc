@@ -228,7 +228,7 @@ void VulkanContext::createDevice() {
 	));
 }
 
-void VulkanContext::createSwapchain(bool vsync) {
+void VulkanContext::createSwapchain(size_t numImages, bool vsync) {
 
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	crashIf(VK_SUCCESS != vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -241,12 +241,18 @@ void VulkanContext::createSwapchain(bool vsync) {
 		(surfaceCapabilities.maxImageCount != 0)
 		? (surfaceCapabilities.maxImageCount)
 		: (UINT32_MAX)
-		);
+	);
 
 	auto swapchainInfo = VkSwapchainCreateInfoKHR{};
 	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainInfo.surface = m_windowSurface;
-	swapchainInfo.minImageCount = std::min(surfaceCapabilities.minImageCount + 1, maxImages);
+	swapchainInfo.minImageCount = std::max(
+		surfaceCapabilities.minImageCount,
+		std::min(
+			static_cast<uint32_t>(numImages),
+			maxImages
+		)
+	);
 	swapchainInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	swapchainInfo.imageExtent = m_windowExtent;
@@ -260,7 +266,7 @@ void VulkanContext::createSwapchain(bool vsync) {
 		(vsync)
 		? (VK_PRESENT_MODE_FIFO_KHR)
 		: (VK_PRESENT_MODE_MAILBOX_KHR)
-		);
+	);
 
 	auto indices = std::array{ 
 		std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]),
@@ -292,7 +298,9 @@ void VulkanContext::createSwapchain(bool vsync) {
 		&vkGetSwapchainImagesKHR,
 		m_device,
 		m_swapchain
-		);
+	);
+
+	std::cout << "Created swapchain with " << m_swapchainImages.size() << " images." << lf;
 
 	m_swapchainImageViews = mapToVector<decltype(m_swapchainImages), VkImageView>(
 		m_swapchainImages,
@@ -923,12 +931,14 @@ void VulkanContext::createPipeline(
 	));
 
 	// Create descriptor sets for the uniform buffers.
+	
+	auto setLayouts = repeat(m_setLayout, m_swapchainImages.size());
+	
 	auto descSetInfo = VkDescriptorSetAllocateInfo{};
 	descSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	descSetInfo.descriptorPool = m_descriptorPool;
 	descSetInfo.descriptorSetCount = static_cast<uint32_t>(m_swapchainImages.size());
-	auto a = repeat(m_setLayout, m_swapchainImages.size());
-	descSetInfo.pSetLayouts = a.data();
+	descSetInfo.pSetLayouts = setLayouts.data();
 
 	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
 	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
