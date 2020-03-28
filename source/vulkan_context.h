@@ -10,11 +10,10 @@
 #include <glm/glm.hpp>
 
 #include "common.h"
-#include "view.h"
 #include "vertex.h"
 #include "uniform.h"
 
-class DrawCall;
+class Mesh;
 
 class VulkanContext {
 private:
@@ -76,7 +75,7 @@ private:
 	size_t m_uniformBufferSize;
 	size_t m_pushConstantSize;
 
-	std::vector<DrawCall const*> m_queuedDrawCalls;
+	std::vector<std::tuple<Mesh const&, PushConstantData>> m_meshRenderCommands;
 
 	std::array<VkSemaphore, NUM_RENDER_EVENTS> m_semaphores;
 	
@@ -89,7 +88,7 @@ private:
 
 	std::tuple<VkBuffer, VkDeviceMemory> createUniformBuffer(size_t bytes);
 
-	void writeToBuffer(
+	void writeDeviceMemory(
 		VkDeviceMemory& mem,
 		void const* data,
 		size_t bytes,
@@ -115,7 +114,7 @@ public:
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);
 	void prepareFrame();
-	void queueDrawCall(DrawCall const& call);
+	void renderMesh(Mesh const& mesh, PushConstantData const& data);
 	void finalizeFrame();
 	
 	inline auto device() { return m_device; }
@@ -132,28 +131,7 @@ public:
 
 	void updateUniformData(UniformData const& data);
 
-	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(
-		View<Vertex> const& vertices
-	) {
-		// Create CPU-accessible buffer.
-		auto host = createBuffer(
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT 
-			| VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-			| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			vertices.bytes()
-		);
-
-		// Write buffer data.
-		writeToBuffer(std::get<1>(host), vertices.items(), vertices.bytes());
-		
-		// Upload to GPU.
-		return uploadToDevice(
-			host, 
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
-			vertices.bytes()
-		);
-	}
+	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(std::vector<Vertex> const& vertices);
 };
 
 // Vulkan resource query with internal return code.

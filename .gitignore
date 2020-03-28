@@ -6,3 +6,4 @@ linux/obj
 *.db
 *.opendb
 *.suo
+.vscode/

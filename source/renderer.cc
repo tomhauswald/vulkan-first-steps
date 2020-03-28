@@ -20,52 +20,50 @@ void Renderer::initialize() {
 		sizeof(PushConstantData)
 	);
 
-	auto& cube = createDrawCall("cube");
-
-	cube.setVertices(makeInlineView<Vertex>({
-
-		{ {-1, +1, +1}, {0,0,1} },
-		{ {+1, +1, +1}, {0,0,1} },
-		{ {+1, -1, +1}, {0,0,1} },
-		{ {+1, -1, +1}, {0,0,1} },
-		{ {-1, -1, +1}, {0,0,1} },
-		{ {-1, +1, +1}, {0,0,1} },
-
-		{ {-1, +1, -1}, {0,1,1} },
-		{ {-1, +1, +1}, {0,1,1} },
-		{ {-1, -1, +1}, {0,1,1} },
-		{ {-1, -1, +1}, {0,1,1} },
-		{ {-1, -1, -1}, {0,1,1} },
-		{ {-1, +1, -1}, {0,1,1} },
-
-		{ {+1, +1, +1}, {1,0,0} },
-		{ {+1, +1, -1}, {1,0,0} },
-		{ {+1, -1, -1}, {1,0,0} },
-		{ {+1, -1, -1}, {1,0,0} },
-		{ {+1, -1, +1}, {1,0,0} },
-		{ {+1, +1, +1}, {1,0,0} },
+	createMesh("cube").setVertices({
 
 		{ {+1, +1, -1}, {1,1,0} },
-		{ {-1, +1, -1}, {1,1,0} },
-		{ {-1, -1, -1}, {1,1,0} },
-		{ {-1, -1, -1}, {1,1,0} },
 		{ {+1, -1, -1}, {1,1,0} },
-		{ {+1, +1, -1}, {1,1,0} },
+		{ {-1, +1, -1}, {1,1,0} },
+		{ {+1, -1, -1}, {1,1,0} },
+		{ {-1, -1, -1}, {1,1,0} },
+		{ {-1, +1, -1}, {1,1,0} },
 
-		{ {-1, +1, -1}, {0,1,0} },
-		{ {+1, +1, -1}, {0,1,0} },
-		{ {+1, +1, +1}, {0,1,0} },
-		{ {+1, +1, +1}, {0,1,0} },
+		{ {-1, +1, +1}, {0,1,1} },
+		{ {-1, +1, -1}, {0,1,1} },
+		{ {-1, -1, -1}, {0,1,1} },
+		{ {-1, -1, -1}, {0,1,1} },
+		{ {-1, -1, +1}, {0,1,1} },
+		{ {-1, +1, +1}, {0,1,1} },
+
+		{ {+1, +1, -1}, {1,0,0} },
+		{ {+1, +1, +1}, {1,0,0} },
+		{ {+1, -1, +1}, {1,0,0} },
+		{ {+1, -1, +1}, {1,0,0} },
+		{ {+1, -1, -1}, {1,0,0} },
+		{ {+1, +1, -1}, {1,0,0} },
+
+		{ {+1, +1, +1}, {0,0,1} },
+		{ {-1, +1, +1}, {0,0,1} },
+		{ {-1, -1, +1}, {0,0,1} },
+		{ {-1, -1, +1}, {0,0,1} },
+		{ {+1, -1, +1}, {0,0,1} },
+		{ {+1, +1, +1}, {0,0,1} },
+
 		{ {-1, +1, +1}, {0,1,0} },
+		{ {+1, +1, +1}, {0,1,0} },
+		{ {+1, +1, -1}, {0,1,0} },
+		{ {+1, +1, -1}, {0,1,0} },
 		{ {-1, +1, -1}, {0,1,0} },
+		{ {-1, +1, +1}, {0,1,0} },
 
-		{ {-1, -1, +1}, {1,0,1} },
-		{ {+1, -1, +1}, {1,0,1} },
-		{ {+1, -1, -1}, {1,0,1} },
-		{ {+1, -1, -1}, {1,0,1} },
 		{ {-1, -1, -1}, {1,0,1} },
+		{ {+1, -1, -1}, {1,0,1} },
+		{ {+1, -1, +1}, {1,0,1} },
+		{ {+1, -1, +1}, {1,0,1} },
 		{ {-1, -1, +1}, {1,0,1} },
-	}));
+		{ {-1, -1, -1}, {1,0,1} },
+	});
 
 	glfwShowWindow(m_pWindow);
 }
@@ -109,36 +107,33 @@ void Renderer::renderScene(Scene const& scene) {
 	m_vulkanContext.prepareFrame();	
 	
 	auto uniformData = UniformData{};
-	{
-		uniformData.viewMatrix = glm::lookAt(
-			glm::vec3{ 0,0,10 },
-			{ 0,0,0 },
-			{ 0,1,0 }
-		);
-
-		uniformData.projectionMatrix = glm::perspective(
-			glm::radians(45.0f),
-			m_settings.resolution.x / (float)m_settings.resolution.y,
-			0.0001f,
-			1000.0f
-		);
-
-		uniformData.projectionMatrix[1][1] *= -1.0f;
-	}
+	uniformData.viewMatrix = glm::lookAtLH(
+		glm::vec3{ 0,0,-10 },
+		{ 0,0,0 },
+		{ 0,1,0 }
+	);
+	uniformData.projectionMatrix = glm::perspectiveLH(
+		glm::radians(45.0f),
+		m_settings.resolution.x / (float)m_settings.resolution.y,
+		0.0001f,
+		1000.0f
+	);
 	setUniformData(uniformData);
 
-	auto pushConstantData = PushConstantData{};
-	{
-		pushConstantData.modelMatrix = glm::rotate(
-			glm::mat4{ 1 },
-			frame++ / 2000.0f,
-			{ 1,1,0 }
-		);
+	for(int y=-1; y<=1; ++y) {
+		for(int x=-1; x<=1; ++x) {
+			getMesh("cube").render({
+				.modelMatrix = 
+					glm::translate(glm::vec3{ x * 2.5f, y * 2.5f, 0.0f }) 
+			      * glm::rotate(
+						glm::mat4{ 1.0f },
+						frame++ / 2000.0f,
+						{ 1.0f, 1.0f, 0.0f }
+					)
+			});
+		}
 	}
-	getDrawCall("cube").setPushConstants(pushConstantData);
 
-	m_vulkanContext.queueDrawCall(getDrawCall("cube"));
-	
 	m_vulkanContext.finalizeFrame();
 }
 

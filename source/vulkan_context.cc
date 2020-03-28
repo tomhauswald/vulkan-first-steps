@@ -1,7 +1,5 @@
 #include "vulkan_context.h"
-#include "vertex.h"
-#include "uniform.h"
-#include "draw_call.h"
+#include "mesh.h"
 
 #include <fstream>
 
@@ -405,10 +403,20 @@ void VulkanContext::recordCommandBuffers() {
 					&descriptorSet,
 					0,
 					nullptr
-				); 
+				);
 
-				for (auto const* dc : m_queuedDrawCalls) {
-					dc->appendToCommandBuffer(commandBuffer);
+				for (auto const& [mesh, data] : m_meshRenderCommands) {
+				
+					vkCmdPushConstants(
+						commandBuffer,
+						m_pipelineLayout,
+						VK_SHADER_STAGE_VERTEX_BIT,
+						0,
+						sizeof(PushConstantData),
+						&data
+					);
+
+					mesh.appendDrawCommand(commandBuffer);
 				}
 			}
 			vkCmdEndRenderPass(commandBuffer);
@@ -428,11 +436,11 @@ void VulkanContext::prepareFrame() {
 		&m_swapchainImageIndex
 	);
 
-	m_queuedDrawCalls.clear();
+	m_meshRenderCommands.clear();
 }
 
-void VulkanContext::queueDrawCall(DrawCall const& call) {
-	m_queuedDrawCalls.push_back(&call);
+void VulkanContext::renderMesh(Mesh const& mesh, PushConstantData const& data) {
+	m_meshRenderCommands.push_back({mesh, data});
 }
 
 void VulkanContext::finalizeFrame() {
@@ -528,7 +536,28 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createUniformBuffer(size_t b
 	);
 }
 
-void VulkanContext::writeToBuffer(
+std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createVertexBuffer(
+	std::vector<Vertex> const& vertices
+) {
+	auto bytes = vertices.size() * sizeof(Vertex);
+
+	// Create CPU-accessible buffer.
+	auto host = createBuffer(
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT 
+		| VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		bytes
+	);
+
+	// Write buffer data.
+	writeDeviceMemory(std::get<VkDeviceMemory>(host), vertices.data(), bytes);
+	
+	// Upload to GPU.
+	return uploadToDevice(host, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, bytes);
+}
+
+void VulkanContext::writeDeviceMemory(
 	VkDeviceMemory& mem,
 	void const* data,
 	size_t bytes,
@@ -737,9 +766,9 @@ void VulkanContext::createPipeline(
 
 	auto viewport = VkViewport{};
 	viewport.x = 0.0f;
-	viewport.y = 0.0f;
+	viewport.y = m_windowExtent.height - 1.0f;
 	viewport.width = static_cast<float>(m_windowExtent.width);
-	viewport.height = static_cast<float>(m_windowExtent.height);
+	viewport.height = -1.0f * m_windowExtent.height;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
@@ -917,7 +946,7 @@ void VulkanContext::createPipeline(
 
 void VulkanContext::updateUniformData(UniformData const& data) {
 	for (auto [buf, mem] : m_swapchainUniformBuffers) {
-		writeToBuffer(mem, &data, sizeof(UniformData));
+		writeDeviceMemory(mem, &data, sizeof(UniformData));
 	}
 }
 

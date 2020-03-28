@@ -1,8 +1,7 @@
 #pragma once
 
 #include "vulkan_context.h"
-#include "draw_call.h"
-#include "view.h"
+#include "mesh.h"
 
 struct Scene { };
 
@@ -19,10 +18,7 @@ private:
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
-	std::unordered_map<
-		std::string, 
-		std::unique_ptr<DrawCall>
-	> m_drawCalls;
+	std::unordered_map<std::string,	Mesh> m_meshes;
 
 	void createWindow();
 
@@ -35,13 +31,13 @@ public:
 	void handleWindowEvents();
 	void renderScene(Scene const& scene);
 	
-	inline auto& createDrawCall(std::string const& name) {
-		m_drawCalls.emplace(name, std::make_unique<DrawCall>(m_vulkanContext));
-		return *m_drawCalls.at(name);
+	inline Mesh& createMesh(std::string const& name) {
+		m_meshes.emplace(name, Mesh(m_vulkanContext));
+		return m_meshes.at(name);
 	}
 	
-	inline auto& getDrawCall(std::string const& name) {
-		return *m_drawCalls.at(name);
+	inline Mesh& getMesh(std::string const& name) {
+		return m_meshes.at(name);
 	}
 
 	void setUniformData(UniformData const& data);
