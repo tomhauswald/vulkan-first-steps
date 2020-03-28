@@ -20,18 +20,16 @@ private:
 	template<typename V>
 	using PerPhysicalDevice = std::unordered_map<VkPhysicalDevice, V>;
 
-	enum QueueRole {
-		QUEUE_ROLE_GRAPHICS,
-		QUEUE_ROLE_PRESENTATION,
-		NUM_QUEUE_ROLES
+	enum class QueueRole {
+		Graphics,
+		Presentation
 	};
 
-	enum RenderEvent {
-		RENDER_EVENT_IMAGE_AVAILABLE,
-		RENDER_EVENT_FRAME_DONE,
-		NUM_RENDER_EVENTS
+	enum class DeviceEvent {
+		SwapchainImageAvailable,
+		FrameRenderingDone
 	};
-	
+
 private:
 	VkInstance m_instance;
 
@@ -48,17 +46,20 @@ private:
 	VkExtent2D m_windowExtent;
 	VkSurfaceKHR m_windowSurface;
 
-	std::array<uint32_t, NUM_QUEUE_ROLES> m_queueFamilyIndices;
-	std::array<VkQueue, NUM_QUEUE_ROLES>  m_queues;
+	std::unordered_map<
+		QueueRole, 
+		std::tuple<uint32_t, VkQueue>
+	> m_queueInfo;
 
 	VkSwapchainKHR m_swapchain;
-	uint32_t m_swapchainImageIndex;
 	std::vector<VkImage> m_swapchainImages;
 	std::vector<VkImageView> m_swapchainImageViews;
 	std::vector<VkFramebuffer> m_swapchainFramebuffers;
 	std::vector<VkDescriptorSet> m_swapchainDescriptorSets;
 	std::vector<VkCommandBuffer> m_swapchainCommandBuffers;
 	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_swapchainUniformBuffers;
+	std::vector<VkFence> m_swapchainFences;
+	uint32_t m_swapchainImageIndex; // <- Index into resource arrays.
 
 	std::unordered_map<std::string, VkShaderModule> m_shaders;
 
@@ -76,8 +77,8 @@ private:
 	size_t m_pushConstantSize;
 
 	std::vector<std::tuple<Mesh const&, PushConstantData>> m_meshRenderCommands;
-
-	std::array<VkSemaphore, NUM_RENDER_EVENTS> m_semaphores;
+	std::vector<std::unordered_map<DeviceEvent, VkSemaphore>> m_semaphores;
+	size_t m_semaphoreIndex = 0;
 	
 private:
 	std::tuple<VkBuffer, VkDeviceMemory> createBuffer(
@@ -101,7 +102,7 @@ private:
 		size_t bytes
 	);
 
-	void recordCommandBuffers();
+	void recordFrameCommandBuffer();
 
 public:
 	~VulkanContext();
@@ -113,9 +114,9 @@ public:
 	
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);
-	void prepareFrame();
+	void onFrameBegin();
 	void renderMesh(Mesh const& mesh, PushConstantData const& data);
-	void finalizeFrame();
+	void onFrameEnd();
 	
 	inline auto device() { return m_device; }
 	inline auto pipelineLayout() { return m_pipelineLayout; }

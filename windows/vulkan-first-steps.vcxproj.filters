@@ -24,9 +24,6 @@
     <ClCompile Include="..\source\vulkan_context.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\draw_call.cc">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\common.h">
@@ -48,6 +45,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\source\draw_call.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

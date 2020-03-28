@@ -170,8 +170,8 @@ void VulkanContext::selectPhysicalDevice() {
 
 		if (isUpgrade) {
 			m_physicalDevice = candidate;
-			m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS] = graphicsFamilyIndex;
-			m_queueFamilyIndices[QUEUE_ROLE_PRESENTATION] = presentationFamilyIndex;
+			std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]) = graphicsFamilyIndex;
+			std::get<uint32_t>(m_queueInfo[QueueRole::Presentation]) = presentationFamilyIndex;
 		}
 	}
 
@@ -181,8 +181,8 @@ void VulkanContext::selectPhysicalDevice() {
 void VulkanContext::createDevice() {
 
 	std::set<uint32_t> uniqueIndices{
-		m_queueFamilyIndices.begin(),
-		m_queueFamilyIndices.end()
+		std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]),
+		std::get<uint32_t>(m_queueInfo[QueueRole::Presentation])
 	};
 
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -207,13 +207,17 @@ void VulkanContext::createDevice() {
 
 	crashIf(vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS);
 
-	for (auto role : range<QueueRole>(NUM_QUEUE_ROLES)) {
-		vkGetDeviceQueue(m_device, m_queueFamilyIndices[role], 0, &m_queues[role]);
+	for (auto role : { QueueRole::Graphics, QueueRole::Presentation }) {
+		vkGetDeviceQueue(
+			m_device,
+			std::get<uint32_t>(m_queueInfo[role]),
+			0,
+			&std::get<VkQueue>(m_queueInfo[role])
+		);
 	}
-
 	auto poolInfo = VkCommandPoolCreateInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
+	poolInfo.queueFamilyIndex = std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]);
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	crashIf(VK_SUCCESS != vkCreateCommandPool(
@@ -258,9 +262,14 @@ void VulkanContext::createSwapchain(bool vsync) {
 		: (VK_PRESENT_MODE_MAILBOX_KHR)
 		);
 
-	// Are graphics and presentation capabilities provided by the same queue family.
-	auto sameQFam = (uniqueElemCount(m_queueFamilyIndices) == 1);
+	auto indices = std::array{ 
+		std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]),
+		std::get<uint32_t>(m_queueInfo[QueueRole::Presentation])
+	};
 
+	// Are graphics and presentation capabilities provided by the same queue family.
+	auto sameQFam = (uniqueElemCount(indices) == 1);
+	
 	swapchainInfo.imageSharingMode = (
 		(sameQFam)
 		? (VK_SHARING_MODE_EXCLUSIVE)
@@ -268,8 +277,8 @@ void VulkanContext::createSwapchain(bool vsync) {
 		);
 
 	if (sameQFam) {
-		swapchainInfo.queueFamilyIndexCount = NUM_QUEUE_ROLES;
-		swapchainInfo.pQueueFamilyIndices = m_queueFamilyIndices.data();
+		swapchainInfo.queueFamilyIndexCount = indices.size();
+		swapchainInfo.pQueueFamilyIndices = indices.data();
 	}
 
 	crashIf(VK_SUCCESS != vkCreateSwapchainKHR(
@@ -349,7 +358,7 @@ void VulkanContext::accomodateWindow(GLFWwindow* window) {
 	crashIf(glfwCreateWindowSurface(m_instance, window, nullptr, &m_windowSurface) != VK_SUCCESS);
 }
 
-void VulkanContext::recordCommandBuffers() {
+void VulkanContext::recordFrameCommandBuffer() {
 
 	// @refactor Initial allocation of command buffers.
 	if (m_swapchainCommandBuffers.size() == 0) {
@@ -367,74 +376,88 @@ void VulkanContext::recordCommandBuffers() {
 		));
 	}
 
-	for (size_t imageIndex = 0; imageIndex < m_swapchainImages.size(); ++imageIndex) {
+	auto& commandBuffer = m_swapchainCommandBuffers[m_swapchainImageIndex];
+	auto& framebuffer   = m_swapchainFramebuffers[m_swapchainImageIndex];
+	auto& descriptorSet = m_swapchainDescriptorSets[m_swapchainImageIndex];
 
-		auto& commandBuffer = m_swapchainCommandBuffers[imageIndex];
-		auto& framebuffer   = m_swapchainFramebuffers[imageIndex];
-		auto& descriptorSet = m_swapchainDescriptorSets[imageIndex];
+	auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
+	cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
-		cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-		crashIf(vkBeginCommandBuffer(commandBuffer, &cmdbufBeginInfo) != VK_SUCCESS);
-		{
-			auto clearValue = VkClearValue{};
-		        clearValue.color = {{ 0.39f, 0.58f, 0.93f }};
+	crashIf(vkBeginCommandBuffer(commandBuffer, &cmdbufBeginInfo) != VK_SUCCESS);
+	{
+		auto clearValue = VkClearValue{};
+		clearValue.color = {{ 0.39f, 0.58f, 0.93f }};
 		
-			auto passBeginInfo = VkRenderPassBeginInfo{};
-			passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-			passBeginInfo.framebuffer = framebuffer;
-			passBeginInfo.clearValueCount = 1;
-			passBeginInfo.pClearValues = &clearValue;
-			passBeginInfo.renderPass = m_renderPass;
-			passBeginInfo.renderArea.extent = m_windowExtent;
+		auto passBeginInfo = VkRenderPassBeginInfo{};
+		passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		passBeginInfo.framebuffer = framebuffer;
+		passBeginInfo.clearValueCount = 1;
+		passBeginInfo.pClearValues = &clearValue;
+		passBeginInfo.renderPass = m_renderPass;
+		passBeginInfo.renderArea.extent = m_windowExtent;
 
-			vkCmdBeginRenderPass(commandBuffer, &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-			{
-				vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+		vkCmdBeginRenderPass(commandBuffer, &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+		{
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 				
-				// Bind the uniform buffer of the current frame.
-				vkCmdBindDescriptorSets(
+			// Bind the uniform buffer of the current frame.
+			vkCmdBindDescriptorSets(
+				commandBuffer,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				m_pipelineLayout,
+				0,
+				1,
+				&descriptorSet,
+				0,
+				nullptr
+			);
+
+			for (auto const& [mesh, data] : m_meshRenderCommands) {
+				
+				vkCmdPushConstants(
 					commandBuffer,
-					VK_PIPELINE_BIND_POINT_GRAPHICS,
 					m_pipelineLayout,
+					VK_SHADER_STAGE_VERTEX_BIT,
 					0,
-					1,
-					&descriptorSet,
-					0,
-					nullptr
+					sizeof(PushConstantData),
+					&data
 				);
 
-				for (auto const& [mesh, data] : m_meshRenderCommands) {
-				
-					vkCmdPushConstants(
-						commandBuffer,
-						m_pipelineLayout,
-						VK_SHADER_STAGE_VERTEX_BIT,
-						0,
-						sizeof(PushConstantData),
-						&data
-					);
-
-					mesh.appendDrawCommand(commandBuffer);
-				}
+				mesh.appendDrawCommand(commandBuffer);
 			}
-			vkCmdEndRenderPass(commandBuffer);
 		}
-		crashIf(vkEndCommandBuffer(commandBuffer) != VK_SUCCESS);
+		vkCmdEndRenderPass(commandBuffer);
 	}
+	crashIf(vkEndCommandBuffer(commandBuffer) != VK_SUCCESS);
 }
 
-void VulkanContext::prepareFrame() {
+void VulkanContext::onFrameBegin() {
 
-	vkAcquireNextImageKHR(
+	// Find out the next swapchain image index to render to.
+	crashIf(VK_SUCCESS != vkAcquireNextImageKHR(
 		m_device,
 		m_swapchain,
 		UINT64_MAX,
-		m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE],
+		m_semaphores[m_semaphoreIndex][DeviceEvent::SwapchainImageAvailable],
 		VK_NULL_HANDLE,
 		&m_swapchainImageIndex
-	);
+	));
+
+	// Wait for all operations on the swapchain image to complete.
+	crashIf(VK_SUCCESS != vkWaitForFences(
+		m_device,
+		1,
+		&m_swapchainFences[m_swapchainImageIndex],
+		VK_TRUE,
+		UINT64_MAX
+	));
+
+	// Allow fence to be reused in the future.
+	crashIf(VK_SUCCESS != vkResetFences(
+		m_device,
+		1,
+		&m_swapchainFences[m_swapchainImageIndex]
+	));
 
 	m_meshRenderCommands.clear();
 }
@@ -443,42 +466,42 @@ void VulkanContext::renderMesh(Mesh const& mesh, PushConstantData const& data) {
 	m_meshRenderCommands.push_back({mesh, data});
 }
 
-void VulkanContext::finalizeFrame() {
+void VulkanContext::onFrameEnd() {
 
-	recordCommandBuffers();
+	recordFrameCommandBuffer();
 
 	auto stage = VkPipelineStageFlags{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	auto submitInfo = VkSubmitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = m_swapchainImages.size();
-	submitInfo.pCommandBuffers = m_swapchainCommandBuffers.data();
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_swapchainCommandBuffers[m_swapchainImageIndex];
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitDstStageMask = &stage;
-	submitInfo.pWaitSemaphores = &m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE];
+	submitInfo.pWaitSemaphores = &m_semaphores[m_semaphoreIndex][DeviceEvent::SwapchainImageAvailable];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &m_semaphores[RENDER_EVENT_FRAME_DONE];
+	submitInfo.pSignalSemaphores = &m_semaphores[m_semaphoreIndex][DeviceEvent::FrameRenderingDone];
 
 	crashIf(VK_SUCCESS != vkQueueSubmit(
-		m_queues[QUEUE_ROLE_GRAPHICS],
+		std::get<VkQueue>(m_queueInfo[QueueRole::Graphics]),
 		1,
 		&submitInfo,
-		VK_NULL_HANDLE
+		m_swapchainFences[m_swapchainImageIndex]
 	));
 
 	auto presentInfo = VkPresentInfoKHR{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &m_semaphores[RENDER_EVENT_FRAME_DONE];
+	presentInfo.pWaitSemaphores = &m_semaphores[m_semaphoreIndex][DeviceEvent::FrameRenderingDone];
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &m_swapchain;
 	presentInfo.pImageIndices = &m_swapchainImageIndex;
 
 	crashIf(VK_SUCCESS != vkQueuePresentKHR(
-		m_queues[QUEUE_ROLE_PRESENTATION],
+		std::get<VkQueue>(m_queueInfo[QueueRole::Presentation]),
 		&presentInfo
 	));
 
-	crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_PRESENTATION]));
+	m_semaphoreIndex = (m_semaphoreIndex + 1) % m_swapchainImages.size();
 }
 
 std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
@@ -489,7 +512,7 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
 	auto bufferInfo = VkBufferCreateInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.queueFamilyIndexCount = 1;
-	bufferInfo.pQueueFamilyIndices = &m_queueFamilyIndices[QUEUE_ROLE_GRAPHICS];
+	bufferInfo.pQueueFamilyIndices = &std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]);
 	bufferInfo.usage = usageMask;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	bufferInfo.size = static_cast<VkDeviceSize>(bytes);
@@ -626,14 +649,16 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::uploadToDevice(
 	submitInfo.pCommandBuffers = &xferCmd;
 
 	crashIf(VK_SUCCESS != vkQueueSubmit(
-		m_queues[QUEUE_ROLE_GRAPHICS],
+		std::get<VkQueue>(m_queueInfo[QueueRole::Graphics]),
 		1,
 		&submitInfo,
 		VK_NULL_HANDLE
 	));
 
 	// Wait for completion.
-	crashIf(VK_SUCCESS != vkQueueWaitIdle(m_queues[QUEUE_ROLE_GRAPHICS]));
+	crashIf(VK_SUCCESS != vkQueueWaitIdle(
+		std::get<VkQueue>(m_queueInfo[QueueRole::Graphics]))
+	);
 
 	// Release CPU-accessible resources.
 	vkDestroyBuffer(m_device, std::get<0>(host), nullptr);
@@ -644,9 +669,9 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::uploadToDevice(
 }
 
 void VulkanContext::createPipeline(
-	std::string const& vertexShaderName, 
-	std::string const& fragmentShaderName, 
-	VkVertexInputBindingDescription const& binding, 
+	std::string const& vertexShaderName,
+	std::string const& fragmentShaderName,
+	VkVertexInputBindingDescription const& binding,
 	std::vector<VkVertexInputAttributeDescription> const& attributes,
 	size_t uniformBufferSize,
 	size_t pushConstantSize
@@ -751,7 +776,7 @@ void VulkanContext::createPipeline(
 	uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uniformBinding.descriptorCount = 1;
 	uniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	
+
 	auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{};
 	setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	setLayoutInfo.bindingCount = 1;
@@ -811,7 +836,7 @@ void VulkanContext::createPipeline(
 	if (m_shaders.count(vertexShaderName) == 0) {
 		loadShader(vertexShaderName);
 	}
-	
+
 	if (m_shaders.count(fragmentShaderName) == 0) {
 		loadShader(fragmentShaderName);
 	}
@@ -844,12 +869,12 @@ void VulkanContext::createPipeline(
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
-		m_device, 
+		m_device,
 		&pipelineLayoutInfo,
 		nullptr,
 		&m_pipelineLayout
 	));
-	
+
 	auto pipelineInfo = VkGraphicsPipelineCreateInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.layout = m_pipelineLayout;
@@ -865,11 +890,11 @@ void VulkanContext::createPipeline(
 	pipelineInfo.pMultisampleState = &msaaState;
 
 	crashIf(VK_SUCCESS != vkCreateGraphicsPipelines(
-		m_device, 
-		VK_NULL_HANDLE, 
-		1, 
+		m_device,
+		VK_NULL_HANDLE,
+		1,
 		&pipelineInfo,
-		nullptr, 
+		nullptr,
 		&m_pipeline
 	));
 
@@ -902,16 +927,16 @@ void VulkanContext::createPipeline(
 	descSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	descSetInfo.descriptorPool = m_descriptorPool;
 	descSetInfo.descriptorSetCount = static_cast<uint32_t>(m_swapchainImages.size());
-	auto a = repeat(m_setLayout, m_swapchainImages.size()); 
+	auto a = repeat(m_setLayout, m_swapchainImages.size());
 	descSetInfo.pSetLayouts = a.data();
-	
+
 	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
 	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
 
-	for (auto i : range(m_swapchainImages.size())) {
+	for (auto img : range(m_swapchainImages.size())) {
 
 		auto uniformBufferInfo = VkDescriptorBufferInfo{};
-		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainUniformBuffers[i]);
+		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainUniformBuffers[img]);
 		uniformBufferInfo.offset = 0;
 		uniformBufferInfo.range = m_uniformBufferSize;
 
@@ -920,40 +945,65 @@ void VulkanContext::createPipeline(
 		writeInfo.descriptorCount = 1;
 		writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		writeInfo.dstBinding = 0;
-		writeInfo.dstSet = m_swapchainDescriptorSets[i];
+		writeInfo.dstSet = m_swapchainDescriptorSets[img];
 		writeInfo.pBufferInfo = &uniformBufferInfo;
 
 		vkUpdateDescriptorSets(m_device, 1, &writeInfo, 0, nullptr);
 	}
 
+	// Create synchronization means.
+
 	auto semaphoreInfo = VkSemaphoreCreateInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	crashIf(VK_SUCCESS != vkCreateSemaphore(
-		m_device,
-		&semaphoreInfo,
-		nullptr,
-		&m_semaphores[RENDER_EVENT_IMAGE_AVAILABLE]
-	));
+	auto fenceInfo = VkFenceCreateInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	crashIf(VK_SUCCESS != vkCreateSemaphore(
-		m_device,
-		&semaphoreInfo,
-		nullptr,
-		&m_semaphores[RENDER_EVENT_FRAME_DONE]
-	));
+	m_semaphores.resize(m_swapchainImages.size());
+	m_swapchainFences.resize(m_swapchainImages.size());
+
+	for (auto img : range(m_swapchainImages.size())) {
+
+		crashIf(VK_SUCCESS != vkCreateFence(
+			m_device,
+			&fenceInfo,
+			nullptr,
+			&m_swapchainFences[img]
+		));
+
+		for (auto evt : {
+			DeviceEvent::SwapchainImageAvailable,
+			DeviceEvent::FrameRenderingDone
+		}) {
+			crashIf(VK_SUCCESS != vkCreateSemaphore(
+				m_device,
+				&semaphoreInfo,
+				nullptr,
+				&m_semaphores[img][evt]
+			));
+		}
+	}
 }
 
 void VulkanContext::updateUniformData(UniformData const& data) {
-	for (auto [buf, mem] : m_swapchainUniformBuffers) {
-		writeDeviceMemory(mem, &data, sizeof(UniformData));
-	}
+	writeDeviceMemory(
+		std::get<VkDeviceMemory>(m_swapchainUniformBuffers[m_swapchainImageIndex]),
+		&data,
+		sizeof(UniformData)
+	);
 }
 
 VulkanContext::~VulkanContext() {
 
-	for (auto semaphore : m_semaphores) {
-		vkDestroySemaphore(m_device, semaphore, nullptr);
+	for (auto& pair : m_semaphores) {
+		for (auto [_, sem] : pair) {
+			vkDestroySemaphore(m_device, sem, nullptr);
+		}
+	}
+
+	for (auto fence : m_swapchainFences) {
+		vkDestroyFence(m_device, fence, nullptr);
 	}
 
 	vkDestroyCommandPool(m_device, m_commandPool, nullptr);

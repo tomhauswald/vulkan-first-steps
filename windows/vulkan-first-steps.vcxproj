@@ -22,10 +22,10 @@
     <ClCompile Include="..\source\engine.cc" />
     <ClCompile Include="..\source\renderer.cc" />
     <ClCompile Include="..\source\vulkan_context.cc" />
-    <ClCompile Include="..\source\draw_call.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\common.h" />
+    <ClInclude Include="..\source\mesh.h" />
     <ClInclude Include="..\source\renderer.h" />
     <ClInclude Include="..\source\vertex.h" />
     <ClInclude Include="..\source\uniform.h" />

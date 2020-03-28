@@ -101,16 +101,18 @@ void Renderer::handleWindowEvents() {
 }
 
 void Renderer::renderScene(Scene const& scene) {
+
+	static const auto launchTime = std::chrono::high_resolution_clock::now();
+	static auto time = std::chrono::duration<float>{};
+	static auto dt = std::chrono::duration<float>{};
 	static auto frameTimeAccum = std::chrono::duration<float>{};
-	static size_t frames = 0;
+	static auto numFrames = size_t{};
 
 	auto frameStartTime = std::chrono::high_resolution_clock::now();
 	
-	[[maybe_unused]] static auto frame = size_t{ 0 };
-
 	(void)scene;
 	
-	m_vulkanContext.prepareFrame();	
+	m_vulkanContext.onFrameBegin();	
 	
 	auto uniformData = UniformData{};
 	uniformData.viewMatrix = glm::lookAtLH(
@@ -128,27 +130,34 @@ void Renderer::renderScene(Scene const& scene) {
 
 	for(int y=-1; y<=1; ++y) {
 		for(int x=-1; x<=1; ++x) {
-			getMesh("cube").render({
-				.modelMatrix = 
-					glm::translate(glm::vec3{ x * 2.5f, y * 2.5f, 0.0f }) 
-			      * glm::rotate(
-						glm::mat4{ 1.0f },
-						frame++ / 2000.0f,
-						{ 1.0f, 1.0f, 0.0f }
-					)
-			});
+
+			auto modelMatrix = glm::translate(
+				glm::vec3{ x * 2.5f, y * 2.5f, 0.0f }
+			);
+			
+			modelMatrix *= glm::rotate(
+				glm::mat4{ 1.0f },
+				time.count(),
+				{ x, y, 1.0f }
+			);
+			
+			getMesh("cube").render({ modelMatrix });
 		}
 	}
 
-	m_vulkanContext.finalizeFrame();
+	m_vulkanContext.onFrameEnd();
 
-	frames++;
-	frameTimeAccum += std::chrono::high_resolution_clock::now() - frameStartTime;
+	dt = std::chrono::high_resolution_clock::now() - frameStartTime;
+	time += dt;
+	
+	numFrames++;
+	frameTimeAccum += dt;
+	
 	if(frameTimeAccum.count() >= 1.0f) {
 		std::stringstream ss;
-		ss << "FPS: " << frames / frameTimeAccum.count();
+		ss << "FPS: " << numFrames / frameTimeAccum.count();
 		glfwSetWindowTitle(m_pWindow, ss.str().c_str());
-		frames = 0;
+		numFrames = 0;
 		frameTimeAccum = {};
 	}
 }
@@ -162,6 +171,8 @@ Renderer::Renderer(RendererSettings const& settings)
 }
 
 Renderer::~Renderer() {
+
+	vkDeviceWaitIdle(m_vulkanContext.device());
 
 	if (m_pWindow) {
 		glfwDestroyWindow(m_pWindow);
