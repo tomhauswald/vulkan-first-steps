@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include <glm/gtx/transform.hpp>
+#include <chrono>
 
 void Renderer::initialize() {	
 
@@ -100,6 +101,11 @@ void Renderer::handleWindowEvents() {
 }
 
 void Renderer::renderScene(Scene const& scene) {
+	static auto frameTimeAccum = std::chrono::duration<float>{};
+	static size_t frames = 0;
+
+	auto frameStartTime = std::chrono::high_resolution_clock::now();
+	
 	[[maybe_unused]] static auto frame = size_t{ 0 };
 
 	(void)scene;
@@ -135,6 +141,16 @@ void Renderer::renderScene(Scene const& scene) {
 	}
 
 	m_vulkanContext.finalizeFrame();
+
+	frames++;
+	frameTimeAccum += std::chrono::high_resolution_clock::now() - frameStartTime;
+	if(frameTimeAccum.count() >= 1.0f) {
+		std::stringstream ss;
+		ss << "FPS: " << frames / frameTimeAccum.count();
+		glfwSetWindowTitle(m_pWindow, ss.str().c_str());
+		frames = 0;
+		frameTimeAccum = {};
+	}
 }
 
 void Renderer::setUniformData(UniformData const& data) {
