@@ -290,6 +290,8 @@ void VulkanContext::createSwapchain(bool vsync) {
 
 	std::cout << "Created swapchain with " << m_swapchainImages.size() << " images." << lf;
 
+	// Create image views for each swapchain image.
+
 	m_swapchainImageViews = mapToVector<decltype(m_swapchainImages), VkImageView>(
 		m_swapchainImages,
 		[&](auto image) {
@@ -310,6 +312,23 @@ void VulkanContext::createSwapchain(bool vsync) {
 		}
 	);
 
+	// Allocate command buffers for each swapchain image.
+
+	auto allocateInfo = VkCommandBufferAllocateInfo{};
+	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocateInfo.commandPool = m_commandPool;
+	allocateInfo.commandBufferCount = m_swapchainImages.size();
+
+	m_swapchainCommandBuffers.resize(m_swapchainImages.size());
+	crashIf(VK_SUCCESS != vkAllocateCommandBuffers(
+		m_device,
+		&allocateInfo,
+		m_swapchainCommandBuffers.data()
+	));
+}
+
+void VulkanContext::createDepthBuffer() {
+
 	auto depthInfo = VkImageCreateInfo{};
 	depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	depthInfo.extent.width = m_windowExtent.width;
@@ -325,26 +344,41 @@ void VulkanContext::createSwapchain(bool vsync) {
 	depthInfo.pQueueFamilyIndices = &std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]);
 
 	crashIf(VK_SUCCESS != vkCreateImage(
-		m_device, 
-		&depthInfo, 
-		nullptr, 
+		m_device,
+		&depthInfo,
+		nullptr,
 		&std::get<VkImage>(m_depthBuffer)
 	));
 
+	VkMemoryRequirements depthImageMemReqs;
+	vkGetImageMemoryRequirements(
+		m_device,
+		std::get<VkImage>(m_depthBuffer),
+		&depthImageMemReqs
+	);
+
 	auto depthAllocInfo = VkMemoryAllocateInfo{};
 	depthAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	depthAllocInfo.allocationSize = sizeof(glm::vec4) * m_windowExtent.width * m_windowExtent.height;
+	depthAllocInfo.allocationSize = depthImageMemReqs.size;
+	depthAllocInfo.memoryTypeIndex = -1;
+
+	for (size_t bit = 0; bit < sizeof(depthImageMemReqs.memoryTypeBits) * 8; ++bit) {
+		if (nthBitHi(depthImageMemReqs.memoryTypeBits, bit)) {
+			depthAllocInfo.memoryTypeIndex = static_cast<uint32_t>(bit);
+			break;
+		}
+	}
 
 	crashIf(VK_SUCCESS != vkAllocateMemory(
-		m_device, 
-		&depthAllocInfo, 
-		nullptr, 
+		m_device,
+		&depthAllocInfo,
+		nullptr,
 		&std::get<VkDeviceMemory>(m_depthBuffer)
 	));
 
 	crashIf(VK_SUCCESS != vkBindImageMemory(
-		m_device, 
-		std::get<VkImage>(m_depthBuffer), 
+		m_device,
+		std::get<VkImage>(m_depthBuffer),
 		std::get<VkDeviceMemory>(m_depthBuffer),
 		0
 	));
@@ -354,16 +388,16 @@ void VulkanContext::createSwapchain(bool vsync) {
 	depthViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	depthViewInfo.image = std::get<VkImage>(m_depthBuffer);
 	depthViewInfo.format = VK_FORMAT_D32_SFLOAT;
-	
+
 	auto& srr = depthViewInfo.subresourceRange;
 	srr.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 	srr.levelCount = 1;
 	srr.layerCount = 1;
 
 	crashIf(VK_SUCCESS != vkCreateImageView(
-		m_device, 
-		&depthViewInfo, 
-		nullptr, 
+		m_device,
+		&depthViewInfo,
+		nullptr,
 		&std::get<VkImageView>(m_depthBuffer)
 	));
 }
@@ -411,80 +445,6 @@ void VulkanContext::accomodateWindow(GLFWwindow* window) {
 	crashIf(glfwCreateWindowSurface(m_instance, window, nullptr, &m_windowSurface) != VK_SUCCESS);
 }
 
-void VulkanContext::recordFrameCommandBuffer() {
-
-	// @refactor Initial allocation of command buffers.
-	if (m_swapchainCommandBuffers.size() == 0) {
-		
-		auto allocateInfo = VkCommandBufferAllocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocateInfo.commandPool = m_commandPool;
-		allocateInfo.commandBufferCount = m_swapchainImages.size();
-
-		m_swapchainCommandBuffers.resize(m_swapchainImages.size());
-		crashIf(VK_SUCCESS != vkAllocateCommandBuffers(
-			m_device, 
-			&allocateInfo, 
-			m_swapchainCommandBuffers.data()
-		));
-	}
-
-	auto& commandBuffer = m_swapchainCommandBuffers[m_swapchainImageIndex];
-	auto& framebuffer   = m_swapchainFramebuffers[m_swapchainImageIndex];
-	auto& descriptorSet = m_swapchainDescriptorSets[m_swapchainImageIndex];
-
-	auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
-	cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-	crashIf(vkBeginCommandBuffer(commandBuffer, &cmdbufBeginInfo) != VK_SUCCESS);
-	{
-		VkClearValue clearValues[2];
-		clearValues[0].color = {{ 0.39f, 0.58f, 0.93f }};
-		clearValues[1].depthStencil = { 1.0f, 0 };
-		
-		auto passBeginInfo = VkRenderPassBeginInfo{};
-		passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		passBeginInfo.framebuffer = framebuffer;
-		passBeginInfo.clearValueCount = 2;
-		passBeginInfo.pClearValues = &clearValues[0];
-		passBeginInfo.renderPass = m_renderPass;
-		passBeginInfo.renderArea.extent = m_windowExtent;
-
-		vkCmdBeginRenderPass(commandBuffer, &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-		{
-			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-				
-			// Bind the uniform buffer of the current frame.
-			vkCmdBindDescriptorSets(
-				commandBuffer,
-				VK_PIPELINE_BIND_POINT_GRAPHICS,
-				m_pipelineLayout,
-				0,
-				1,
-				&descriptorSet,
-				0,
-				nullptr
-			);
-
-			for (auto const& [mesh, data] : m_meshRenderCommands) {
-				
-				vkCmdPushConstants(
-					commandBuffer,
-					m_pipelineLayout,
-					VK_SHADER_STAGE_VERTEX_BIT,
-					0,
-					sizeof(PushConstantData),
-					&data
-				);
-
-				mesh.appendDrawCommand(commandBuffer);
-			}
-		}
-		vkCmdEndRenderPass(commandBuffer);
-	}
-	crashIf(vkEndCommandBuffer(commandBuffer) != VK_SUCCESS);
-}
-
 void VulkanContext::onFrameBegin() {
 
 	// Find out the next swapchain image index to render to.
@@ -512,17 +472,89 @@ void VulkanContext::onFrameBegin() {
 		1,
 		&m_swapchainFences[m_swapchainImageIndex]
 	));
+	
 
-	m_meshRenderCommands.clear();
+	auto cmdbufBeginInfo = VkCommandBufferBeginInfo{};
+	cmdbufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	// Start recording the command buffer for this frame.
+	crashIf(VK_SUCCESS != vkBeginCommandBuffer(
+		m_swapchainCommandBuffers[m_swapchainImageIndex], 
+		&cmdbufBeginInfo
+	));
+	
+	VkClearValue clearValues[2];
+	clearValues[0].color = { { 0.39f, 0.58f, 0.93f } };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	auto passBeginInfo = VkRenderPassBeginInfo{};
+	passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	passBeginInfo.framebuffer = m_swapchainFramebuffers[m_swapchainImageIndex];
+	passBeginInfo.clearValueCount = 2;
+	passBeginInfo.pClearValues = &clearValues[0];
+	passBeginInfo.renderPass = m_renderPass;
+	passBeginInfo.renderArea.extent = m_windowExtent;
+
+	vkCmdBeginRenderPass(
+		m_swapchainCommandBuffers[m_swapchainImageIndex], 
+		&passBeginInfo, 
+		VK_SUBPASS_CONTENTS_INLINE
+	);
+
+	vkCmdBindPipeline(
+		m_swapchainCommandBuffers[m_swapchainImageIndex], 
+		VK_PIPELINE_BIND_POINT_GRAPHICS, 
+		m_pipeline
+	);
+
+	// Bind the uniform buffer of the current frame.
+	vkCmdBindDescriptorSets(
+		m_swapchainCommandBuffers[m_swapchainImageIndex],
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		m_pipelineLayout,
+		0,
+		1,
+		&m_swapchainDescriptorSets[m_swapchainImageIndex],
+		0,
+		nullptr
+	);
 }
 
 void VulkanContext::renderMesh(Mesh const& mesh, PushConstantData const& data) {
-	m_meshRenderCommands.push_back({mesh, data});
+	
+	vkCmdPushConstants(
+		m_swapchainCommandBuffers[m_swapchainImageIndex],
+		m_pipelineLayout,
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0,
+		sizeof(PushConstantData),
+		&data
+	);
+
+	auto const offsetZero = VkDeviceSize{};
+	vkCmdBindVertexBuffers(
+		m_swapchainCommandBuffers[m_swapchainImageIndex], 
+		0, 
+		1, 
+		&mesh.vertexBuffer(), 
+		&offsetZero
+	);
+
+	vkCmdDraw(
+		m_swapchainCommandBuffers[m_swapchainImageIndex],
+		static_cast<uint32_t>(mesh.vertices().size()), 
+		1, 
+		0, 
+		0
+	);
 }
 
 void VulkanContext::onFrameEnd() {
 
-	recordFrameCommandBuffer();
+	// End of commands.
+
+	vkCmdEndRenderPass(m_swapchainCommandBuffers[m_swapchainImageIndex]);
+	crashIf(vkEndCommandBuffer(m_swapchainCommandBuffers[m_swapchainImageIndex]) != VK_SUCCESS);
 
 	auto stage = VkPipelineStageFlags{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	auto submitInfo = VkSubmitInfo{};

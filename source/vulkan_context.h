@@ -10,8 +10,7 @@
 #include <glm/glm.hpp>
 
 #include "common.h"
-#include "vertex.h"
-#include "uniform.h"
+#include "shader_interface.h"
 
 class Mesh;
 
@@ -78,7 +77,6 @@ private:
 	size_t m_uniformBufferSize;
 	size_t m_pushConstantSize;
 
-	std::vector<std::tuple<Mesh const&, PushConstantData>> m_meshRenderCommands;
 	std::vector<std::unordered_map<DeviceEvent, VkSemaphore>> m_semaphores;
 	size_t m_semaphoreIndex = 0;
 	
@@ -104,8 +102,6 @@ private:
 		size_t bytes
 	);
 
-	void recordFrameCommandBuffer();
-
 public:
 	~VulkanContext();
 	
@@ -113,6 +109,7 @@ public:
 	void selectPhysicalDevice();
 	void createDevice();
 	void createSwapchain(bool vsync);
+	void createDepthBuffer();
 	
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);

@@ -11,6 +11,7 @@ void Renderer::initialize() {
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
 	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
+	m_vulkanContext.createDepthBuffer();
 	m_vulkanContext.createPipeline(
 		"vert-colored"s,
 		"frag-unshaded"s,
@@ -19,51 +20,6 @@ void Renderer::initialize() {
 		sizeof(UniformData),
 		sizeof(PushConstantData)
 	);
-
-	createMesh("cube").setVertices({
-
-		{ {+1, +1, -1}, {1,1,0} },
-		{ {+1, -1, -1}, {1,1,0} },
-		{ {-1, +1, -1}, {1,1,0} },
-		{ {+1, -1, -1}, {1,1,0} },
-		{ {-1, -1, -1}, {1,1,0} },
-		{ {-1, +1, -1}, {1,1,0} },
-
-		{ {-1, +1, +1}, {0,1,1} },
-		{ {-1, +1, -1}, {0,1,1} },
-		{ {-1, -1, -1}, {0,1,1} },
-		{ {-1, -1, -1}, {0,1,1} },
-		{ {-1, -1, +1}, {0,1,1} },
-		{ {-1, +1, +1}, {0,1,1} },
-
-		{ {+1, +1, -1}, {1,0,0} },
-		{ {+1, +1, +1}, {1,0,0} },
-		{ {+1, -1, +1}, {1,0,0} },
-		{ {+1, -1, +1}, {1,0,0} },
-		{ {+1, -1, -1}, {1,0,0} },
-		{ {+1, +1, -1}, {1,0,0} },
-
-		{ {+1, +1, +1}, {0,0,1} },
-		{ {-1, +1, +1}, {0,0,1} },
-		{ {-1, -1, +1}, {0,0,1} },
-		{ {-1, -1, +1}, {0,0,1} },
-		{ {+1, -1, +1}, {0,0,1} },
-		{ {+1, +1, +1}, {0,0,1} },
-
-		{ {-1, +1, +1}, {0,1,0} },
-		{ {+1, +1, +1}, {0,1,0} },
-		{ {+1, +1, -1}, {0,1,0} },
-		{ {+1, +1, -1}, {0,1,0} },
-		{ {-1, +1, -1}, {0,1,0} },
-		{ {-1, +1, +1}, {0,1,0} },
-
-		{ {-1, -1, -1}, {1,0,1} },
-		{ {+1, -1, -1}, {1,0,1} },
-		{ {+1, -1, +1}, {1,0,1} },
-		{ {+1, -1, +1}, {1,0,1} },
-		{ {-1, -1, +1}, {1,0,1} },
-		{ {-1, -1, -1}, {1,0,1} },
-	});
 
 	glfwShowWindow(m_pWindow);
 }
@@ -99,67 +55,23 @@ void Renderer::handleWindowEvents() {
 	glfwPollEvents();
 }
 
-void Renderer::renderScene(Scene const& scene) {
+void Renderer::renderMesh(Mesh const& mesh, PushConstantData const& data) {
+	m_vulkanContext.renderMesh(mesh, data);
+}
 
-	static auto time = std::chrono::duration<float>{};
-	static auto dt = std::chrono::duration<float>{};
-	static auto frameTimeAccum = std::chrono::duration<float>{};
-	static auto numFrames = size_t{};
+bool Renderer::tryBeginFrame() {
 
-	(void)scene;
-
-	auto frameStartTime = std::chrono::high_resolution_clock::now();
-	
-	m_vulkanContext.onFrameBegin();	
-	
-	auto uniformData = UniformData{};
-	uniformData.viewMatrix = glm::lookAtLH(
-		glm::vec3{ 0,0,-10 },
-		{ 0,0,0 },
-		{ 0,1,0 }
-	);
-	uniformData.projectionMatrix = glm::perspectiveLH(
-		glm::radians(45.0f),
-		m_settings.resolution.x / (float)m_settings.resolution.y,
-		0.0001f,
-		1000.0f
-	);
-	setUniformData(uniformData);
-
-	for (int z = -1; z <= 1; ++z ) {
-		for (int y = -1; y <= 1; ++y) {
-			for (int x = -1; x <= 1; ++x) {
-
-				auto modelMatrix = glm::translate(
-					glm::vec3{ x * 3.0f, y * 3.0f, z * 3.0f }
-				);
-
-				if(x || y || z) {
-					modelMatrix *= glm::rotate(
-						glm::mat4{ 1.0f },
-						time.count(),
-						{ x, y, z }
-					);
-				}
-				
-				getMesh("cube").render({ modelMatrix });
-			}
-		}
+	if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
+		vkDeviceWaitIdle(m_vulkanContext.device());
+		return false;
 	}
 
+	m_vulkanContext.onFrameBegin();
+	return true;
+}
+
+void Renderer::endFrame() {
 	m_vulkanContext.onFrameEnd();
-
-	dt = std::chrono::high_resolution_clock::now() - frameStartTime;
-	time += dt;
-	
-	numFrames++;
-	frameTimeAccum += dt;
-	
-	if(frameTimeAccum.count() >= 5.0f) {
-		std::cout << "FPS: " << numFrames / frameTimeAccum.count() << lf;
-		numFrames = 0;
-		frameTimeAccum = {};
-	}
 }
 
 void Renderer::setUniformData(UniformData const& data) {

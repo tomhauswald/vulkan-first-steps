@@ -4,65 +4,21 @@
 
 class Mesh {
 private:
-	VulkanContext& m_context;
+	VulkanContext* m_pContext;
 	std::vector<Vertex> m_vertices;
 	VkBuffer m_vertexBuffer;
 	VkDeviceMemory m_vertexBufferMemory;
 
-	void releaseBuffers() {
-
-		if(m_vertexBuffer != VK_NULL_HANDLE) {
-			vkDestroyBuffer(m_context.device(), m_vertexBuffer, nullptr);
-			m_vertexBuffer = VK_NULL_HANDLE;
-		}
-		
-		if(m_vertexBufferMemory != VK_NULL_HANDLE) {
-			vkFreeMemory(m_context.device(), m_vertexBufferMemory, nullptr);
-			m_vertexBufferMemory = VK_NULL_HANDLE;
-		}
-	}
+	void releaseBuffers();
 
 public:
-	Mesh(VulkanContext& ctx) :
-		m_context{ctx}, 
-		m_vertices{},
-		m_vertexBuffer{VK_NULL_HANDLE}, 
-		m_vertexBufferMemory{VK_NULL_HANDLE} {
-	}
+	Mesh();
+	~Mesh();
 
-	~Mesh() {
-		releaseBuffers();
-	}
-
-	std::vector<Vertex> const& vertices() const { return m_vertices; }
-
-	void setVertices(std::vector<Vertex> const& vertices) { 
-		
-		// Wait for all frames in flight to be delivered before updating
-		// the vertex data.
-		vkDeviceWaitIdle(m_context.device());
-		
-		// Free previous buffer resources, if any.
-		releaseBuffers();
-
-		// Create new buffer resources.
-		m_vertices = vertices; 
-		auto [buf, mem] = m_context.createVertexBuffer(m_vertices);
-		m_vertexBuffer = buf;
-		m_vertexBufferMemory = mem;
-	}
-
-	void render(PushConstantData const& data) const {
-		m_context.renderMesh(*this, data);
-	}
+	void setVulkanContext(VulkanContext& ctx);
 	
-	void appendDrawCommand(VkCommandBuffer& cmdbuf) const {
-		
-		crashIf(m_vertexBuffer == VK_NULL_HANDLE);
+	std::vector<Vertex> const& vertices() const;
+	void setVertices(std::vector<Vertex> const& vertices);
 
-		auto const offsetZero = VkDeviceSize{};
-		vkCmdBindVertexBuffers(cmdbuf, 0, 1, &m_vertexBuffer, &offsetZero);
-
-		vkCmdDraw(cmdbuf, static_cast<uint32_t>(m_vertices.size()), 1, 0, 0);
-	}
+	VkBuffer const& vertexBuffer() const;
 };

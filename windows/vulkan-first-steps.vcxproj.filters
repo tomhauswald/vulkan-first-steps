@@ -24,6 +24,12 @@
     <ClCompile Include="..\source\vulkan_context.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\source\mesh.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\camera.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\common.h">
@@ -35,19 +41,16 @@
     <ClInclude Include="..\source\vulkan_context.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\view.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\source\vertex.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\source\uniform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\draw_call.h">
+    <ClInclude Include="..\source\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\mesh.h">
+    <ClInclude Include="..\source\camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\shader_interface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

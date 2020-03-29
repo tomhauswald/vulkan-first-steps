@@ -1,7 +1,6 @@
 #pragma once
 
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
+#include <glm/matrix.hpp>
 #include <vulkan/vulkan.h>
 
 #include "common.h"
@@ -58,7 +57,6 @@ auto describeVertexInputAttributes(uint32_t binding) {
 }
 
 struct Vertex {
-	
 	glm::vec3 position;
 	glm::vec3 color;
 
@@ -72,4 +70,13 @@ struct Vertex {
 			glm::vec3
 		>(0); 
 	}
+};
+
+struct UniformData {
+	glm::mat4 viewMatrix;
+	glm::mat4 projectionMatrix;
+};
+
+struct PushConstantData {
+	glm::mat4 modelMatrix;
 };

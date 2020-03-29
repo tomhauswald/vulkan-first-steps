@@ -19,19 +19,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\source\camera.cc" />
     <ClCompile Include="..\source\engine.cc" />
+    <ClCompile Include="..\source\mesh.cc" />
     <ClCompile Include="..\source\renderer.cc" />
     <ClCompile Include="..\source\vulkan_context.cc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\source\camera.h" />
     <ClInclude Include="..\source\common.h" />
     <ClInclude Include="..\source\mesh.h" />
     <ClInclude Include="..\source\renderer.h" />
-    <ClInclude Include="..\source\vertex.h" />
+    <ClInclude Include="..\source\shader_interface.h" />
     <ClInclude Include="..\source\uniform.h" />
-    <ClInclude Include="..\source\view.h" />
     <ClInclude Include="..\source\vulkan_context.h" />
-    <ClInclude Include="..\source\draw_call.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
