@@ -17,7 +17,7 @@ private:
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
-	std::vector<Mesh> m_meshes;
+	std::vector<std::unique_ptr<Mesh>> m_meshes;
 
 	void createWindow();
 
@@ -29,16 +29,15 @@ public:
 	bool isWindowOpen() const;
 	void handleWindowEvents();
 
-	void renderMesh(Mesh const& mesh, PushConstantData const& data);
+	void renderMesh(Mesh const& mesh, ShaderPushConstants const& push);
 
 	bool tryBeginFrame();
 	void endFrame();
 
 	inline Mesh& createMesh() {
-		m_meshes.push_back({});
-		m_meshes.back().setVulkanContext(m_vulkanContext);
-		return m_meshes.back();
+		m_meshes.push_back(std::make_unique<Mesh>(m_vulkanContext));
+		return *m_meshes.back();
 	}
-	
-	void setUniformData(UniformData const& data);
+
+	void setUniformData(ShaderUniforms const& data);
 };

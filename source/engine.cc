@@ -7,13 +7,11 @@ struct EngineSettings {
 	RendererSettings renderer;
 };
 
-Mesh const* cubeMesh;
-
-void createCubeMesh(Renderer& r) {
+Mesh const& createCubeMesh(Renderer& r) {
 
 	auto& cube = r.createMesh();
 	cube.setVertices({
-
+		
 		{ {+1, +1, -1}, {1,1,0} },
 		{ {+1, -1, -1}, {1,1,0} },
 		{ {-1, +1, -1}, {1,1,0} },
@@ -57,10 +55,11 @@ void createCubeMesh(Renderer& r) {
 		{ {-1, -1, -1}, {1,0,1} }
 	});
 
-	cubeMesh = &cube;
+	cube.updateVulkanBuffers();
+	return cube;
 }
 
-void renderCubes(Renderer& r) {
+void renderCubes(Renderer& r, Mesh const& cube) {
 
 	for (int z = -1; z <= 1; ++z) {
 		for (int y = -1; y <= 1; ++y) {
@@ -78,7 +77,7 @@ void renderCubes(Renderer& r) {
 					);
 				}
 
-				r.renderMesh(*cubeMesh, { modelMatrix });
+				r.renderMesh(cube, { modelMatrix });
 			}
 		}
 	}
@@ -98,7 +97,7 @@ public:
 	void run() {
 		m_renderer.initialize();
 
-		createCubeMesh(m_renderer);
+		auto const& cube = createCubeMesh(m_renderer);
 
 		auto camera = Camera(
 			m_settings.renderer.resolution.x / (float)m_settings.renderer.resolution.y,
@@ -111,12 +110,12 @@ public:
 
 			if (m_renderer.tryBeginFrame()) {
 
-				auto uniformData = UniformData{};
+				auto uniformData = ShaderUniforms{};
 				uniformData.viewMatrix = camera.viewMatrix();
 				uniformData.projectionMatrix = camera.projMatrix();
 				m_renderer.setUniformData(uniformData);
 
-				renderCubes(m_renderer);
+				renderCubes(m_renderer, cube);
 
 				m_renderer.endFrame();
 			}

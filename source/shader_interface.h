@@ -72,11 +72,11 @@ struct Vertex {
 	}
 };
 
-struct UniformData {
+struct ShaderUniforms {
 	glm::mat4 viewMatrix;
 	glm::mat4 projectionMatrix;
 };
 
-struct PushConstantData {
+struct ShaderPushConstants {
 	glm::mat4 modelMatrix;
 };

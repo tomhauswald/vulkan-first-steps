@@ -17,8 +17,8 @@ void Renderer::initialize() {
 		"frag-unshaded"s,
 		Vertex::binding(),
 		Vertex::attributes(),
-		sizeof(UniformData),
-		sizeof(PushConstantData)
+		sizeof(ShaderUniforms),
+		sizeof(ShaderPushConstants)
 	);
 
 	glfwShowWindow(m_pWindow);
@@ -55,14 +55,16 @@ void Renderer::handleWindowEvents() {
 	glfwPollEvents();
 }
 
-void Renderer::renderMesh(Mesh const& mesh, PushConstantData const& data) {
-	m_vulkanContext.renderMesh(mesh, data);
+void Renderer::renderMesh(Mesh const& mesh, ShaderPushConstants const& push) {
+	auto [vbo, ibo] = mesh.vulkanBufferHandles();
+	m_vulkanContext.setPushConstants(push);
+	m_vulkanContext.draw(vbo, ibo, mesh.vertices().size());
 }
 
 bool Renderer::tryBeginFrame() {
 
 	if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
-		vkDeviceWaitIdle(m_vulkanContext.device());
+		m_vulkanContext.flush();
 		return false;
 	}
 
@@ -74,8 +76,8 @@ void Renderer::endFrame() {
 	m_vulkanContext.onFrameEnd();
 }
 
-void Renderer::setUniformData(UniformData const& data) {
-	m_vulkanContext.updateUniformData(data);
+void Renderer::setUniformData(ShaderUniforms const& data) {
+	m_vulkanContext.setUniforms(data);
 }
 
 Renderer::Renderer(RendererSettings const& settings)
@@ -84,8 +86,8 @@ Renderer::Renderer(RendererSettings const& settings)
 
 Renderer::~Renderer() {
 
-	vkDeviceWaitIdle(m_vulkanContext.device());
-
+	m_vulkanContext.flush();
+	
 	if (m_pWindow) {
 		glfwDestroyWindow(m_pWindow);
 		m_pWindow = nullptr;

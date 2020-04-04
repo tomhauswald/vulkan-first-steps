@@ -24,9 +24,6 @@
     <ClCompile Include="..\source\vulkan_context.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\mesh.cc">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\source\camera.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -51,6 +48,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\source\shader_interface.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\pool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -21,13 +21,13 @@
   <ItemGroup>
     <ClCompile Include="..\source\camera.cc" />
     <ClCompile Include="..\source\engine.cc" />
-    <ClCompile Include="..\source\mesh.cc" />
     <ClCompile Include="..\source\renderer.cc" />
     <ClCompile Include="..\source\vulkan_context.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\camera.h" />
     <ClInclude Include="..\source\common.h" />
+    <ClInclude Include="..\source\pool.h" />
     <ClInclude Include="..\source\mesh.h" />
     <ClInclude Include="..\source\renderer.h" />
     <ClInclude Include="..\source\shader_interface.h" />

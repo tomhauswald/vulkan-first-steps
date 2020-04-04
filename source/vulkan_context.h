@@ -12,8 +12,6 @@
 #include "common.h"
 #include "shader_interface.h"
 
-class Mesh;
-
 class VulkanContext {
 private:
 	template<typename V>
@@ -113,12 +111,6 @@ public:
 	
 	VkShaderModule const& loadShader(std::string const& name);
 	void accomodateWindow(GLFWwindow* window);
-	void onFrameBegin();
-	void renderMesh(Mesh const& mesh, PushConstantData const& data);
-	void onFrameEnd();
-	
-	inline auto device() { return m_device; }
-	inline auto pipelineLayout() { return m_pipelineLayout; }
 
 	void createPipeline(
 		std::string const& vertexShaderName,
@@ -129,9 +121,17 @@ public:
 		size_t pushConstantSize
 	);
 
-	void updateUniformData(UniformData const& data);
-
 	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(std::vector<Vertex> const& vertices);
+	std::tuple<VkBuffer, VkDeviceMemory> createIndexBuffer(std::vector<uint32_t> const& indices);
+	void destroyBuffer(std::tuple<VkBuffer, VkDeviceMemory> buffer);
+
+	void setUniforms(ShaderUniforms const& uniforms);
+	void setPushConstants(ShaderPushConstants const& push);
+
+	void onFrameBegin();
+	void draw(VkBuffer vbuf, VkBuffer ibuf, uint32_t count);
+	void onFrameEnd();
+	void flush();
 };
 
 // Vulkan resource query with internal return code.

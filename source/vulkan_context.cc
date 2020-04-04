@@ -520,33 +520,21 @@ void VulkanContext::onFrameBegin() {
 	);
 }
 
-void VulkanContext::renderMesh(Mesh const& mesh, PushConstantData const& data) {
+void VulkanContext::draw(VkBuffer vbuf, VkBuffer ibuf, uint32_t count) {
 	
-	vkCmdPushConstants(
-		m_swapchainCommandBuffers[m_swapchainImageIndex],
-		m_pipelineLayout,
-		VK_SHADER_STAGE_VERTEX_BIT,
-		0,
-		sizeof(PushConstantData),
-		&data
-	);
+	static constexpr auto offsetZero = VkDeviceSize{};
+	auto cmdbuf = m_swapchainCommandBuffers[m_swapchainImageIndex];
 
-	auto const offsetZero = VkDeviceSize{};
-	vkCmdBindVertexBuffers(
-		m_swapchainCommandBuffers[m_swapchainImageIndex], 
-		0, 
-		1, 
-		&mesh.vertexBuffer(), 
-		&offsetZero
-	);
+	vkCmdBindVertexBuffers(cmdbuf, 0, 1, &vbuf,	&offsetZero);
 
-	vkCmdDraw(
-		m_swapchainCommandBuffers[m_swapchainImageIndex],
-		static_cast<uint32_t>(mesh.vertices().size()), 
-		1, 
-		0, 
-		0
-	);
+	// Draw indexed.
+	if (ibuf) {
+		vkCmdBindIndexBuffer(cmdbuf, ibuf, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmdbuf, count, 1, 0, 0, 0);
+	}
+
+	// Don't draw indexed.
+	else vkCmdDraw(cmdbuf, count, 1, 0, 0);
 }
 
 void VulkanContext::onFrameEnd() {
@@ -664,6 +652,36 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createVertexBuffer(
 	
 	// Upload to GPU.
 	return uploadToDevice(host, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, bytes);
+}
+
+std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createIndexBuffer(
+	std::vector<uint32_t> const& indices
+) {
+	auto bytes = indices.size() * sizeof(uint32_t);
+
+	// Create CPU-accessible buffer.
+	auto host = createBuffer(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+		| VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		bytes
+	);
+
+	// Write buffer data.
+	writeDeviceMemory(std::get<VkDeviceMemory>(host), indices.data(), bytes);
+
+	// Upload to GPU.
+	return uploadToDevice(host, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, bytes);
+}
+
+void VulkanContext::destroyBuffer(std::tuple<VkBuffer, VkDeviceMemory> buffer) {
+	vkDestroyBuffer(m_device, std::get<VkBuffer>(buffer), nullptr);
+	vkFreeMemory(m_device, std::get<VkDeviceMemory>(buffer), nullptr);
+}
+
+void VulkanContext::flush() {
+	vkDeviceWaitIdle(m_device);
 }
 
 void VulkanContext::writeDeviceMemory(
@@ -1089,11 +1107,22 @@ void VulkanContext::createPipeline(
 	}
 }
 
-void VulkanContext::updateUniformData(UniformData const& data) {
+void VulkanContext::setUniforms(ShaderUniforms const& uniforms) {
 	writeDeviceMemory(
 		std::get<VkDeviceMemory>(m_swapchainUniformBuffers[m_swapchainImageIndex]),
-		&data,
-		sizeof(UniformData)
+		&uniforms,
+		sizeof(ShaderUniforms)
+	);
+}
+
+void VulkanContext::setPushConstants(ShaderPushConstants const& push) {
+	vkCmdPushConstants(
+		m_swapchainCommandBuffers[m_swapchainImageIndex],
+		m_pipelineLayout,
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0,
+		sizeof(ShaderPushConstants),
+		&push
 	);
 }
 
