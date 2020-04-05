@@ -11,8 +11,8 @@ private:
 	std::vector<Vertex> m_vertices;
 	std::vector<uint32_t> m_indices;
 
-	std::tuple<VkBuffer, VkDeviceMemory> m_vertexBuffer;
-	std::tuple<VkBuffer, VkDeviceMemory> m_indexBuffer;
+	BufferInfo m_vbufInfo;
+	BufferInfo m_ibufInfo;
 
 	std::bitset<2> m_dirty;
 
@@ -21,12 +21,12 @@ private:
 
 		m_vulkanContext.flush();
 
-		if (m_vertices.size()) {
-			m_vulkanContext.destroyBuffer(m_vertexBuffer);
+		if (m_vbufInfo.buffer) {
+			m_vulkanContext.destroyBuffer(m_vbufInfo);
 		}
 
-		if (m_indices.size()) {
-			m_vulkanContext.destroyBuffer(m_indexBuffer);
+		if (m_ibufInfo.buffer) {
+			m_vulkanContext.destroyBuffer(m_ibufInfo);
 		}
 	}
 
@@ -35,8 +35,8 @@ public:
 		m_vulkanContext{ vulkanContext },
 		m_vertices{},
 		m_indices{},
-		m_vertexBuffer{ VK_NULL_HANDLE, VK_NULL_HANDLE },
-		m_indexBuffer{ VK_NULL_HANDLE, VK_NULL_HANDLE },
+		m_vbufInfo{},
+		m_ibufInfo{},
 		m_dirty{ 0 } {
 	}
 	
@@ -71,19 +71,21 @@ public:
 
 		freeVulkanResources();
 
-		if (m_dirty[0]) m_vertexBuffer = m_vulkanContext.createVertexBuffer(m_vertices);
-		if (m_dirty[1]) m_indexBuffer = m_vulkanContext.createIndexBuffer(m_indices);
+		if (m_dirty[0]) m_vbufInfo = m_vulkanContext.createVertexBuffer(m_vertices);
+		if (m_dirty[1]) m_ibufInfo = m_vulkanContext.createIndexBuffer(m_indices);
 		m_dirty.reset();
 	}
 
-	// The constness of this is questionable, since we are returning
+	// The constness of these are questionable, since we are returning
 	// native handles to the vulkan buffers. However, the result of
 	// this operation shall exclusively be used for read and draw
 	// commands. To express this, we opt for the const.
-	inline std::pair<VkBuffer, VkBuffer> vulkanBufferHandles() const {
-		return { 
-			std::get<VkBuffer>(m_vertexBuffer), 
-			std::get<VkBuffer>(m_indexBuffer) 
-		};
+
+	inline VkBuffer vulkanVertexBuffer() const {
+		return m_vbufInfo.buffer;
+	}
+
+	inline VkBuffer vulkanIndexBuffer() const {
+		return m_ibufInfo.buffer;
 	}
 };

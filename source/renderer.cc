@@ -56,9 +56,13 @@ void Renderer::handleWindowEvents() {
 }
 
 void Renderer::renderMesh(Mesh const& mesh, ShaderPushConstants const& push) {
-	auto [vbo, ibo] = mesh.vulkanBufferHandles();
+	
 	m_vulkanContext.setPushConstants(push);
-	m_vulkanContext.draw(vbo, ibo, mesh.vertices().size());
+	m_vulkanContext.draw(
+		mesh.vulkanVertexBuffer(), 
+		mesh.vulkanIndexBuffer(),
+		static_cast<uint32_t>(mesh.vertices().size())
+	);
 }
 
 bool Renderer::tryBeginFrame() {

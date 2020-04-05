@@ -578,24 +578,28 @@ void VulkanContext::onFrameEnd() {
 	m_semaphoreIndex = (m_semaphoreIndex + 1) % m_swapchainImages.size();
 }
 
-std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
-	VkBufferUsageFlags usageMask,
-	VkMemoryPropertyFlags propertyMask,
+BufferInfo VulkanContext::createBuffer(
+	VkBufferUsageFlags usage,
+	VkMemoryPropertyFlags memProps,
 	size_t bytes
 ) {
+	BufferInfo result;
+	result.usage = usage;
+	result.memoryProperties = memProps;
+	result.sizeInBytes = bytes;
+
 	auto bufferInfo = VkBufferCreateInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.queueFamilyIndexCount = 1;
 	bufferInfo.pQueueFamilyIndices = &std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]);
-	bufferInfo.usage = usageMask;
+	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	bufferInfo.size = static_cast<VkDeviceSize>(bytes);
 
-	auto buf = VkBuffer{};
-	vkCreateBuffer(m_device, &bufferInfo, nullptr, &buf);
+	vkCreateBuffer(m_device, &bufferInfo, nullptr, &result.buffer);
 
 	auto memReqmt = VkMemoryRequirements{};
-	vkGetBufferMemoryRequirements(m_device, buf, &memReqmt);
+	vkGetBufferMemoryRequirements(m_device, result.buffer, &memReqmt);
 
 	auto allocInfo = VkMemoryAllocateInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -608,76 +612,58 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createBuffer(
 
 		if (!nthBitHi(memReqmt.memoryTypeBits, i)) continue; // Skip types according to mask.
 
-		if (satisfiesBitMask(
-			devMemProps.memoryTypes[i].propertyFlags,
-			propertyMask
-		)) {
+		if (satisfiesBitMask(devMemProps.memoryTypes[i].propertyFlags, memProps)) {
 			allocInfo.memoryTypeIndex = i;
 			break;
 		}
 	}
 
-	auto mem = VkDeviceMemory{};
-	crashIf(vkAllocateMemory(m_device, &allocInfo, nullptr, &mem) != VK_SUCCESS);
-	crashIf(vkBindBufferMemory(m_device, buf, mem, 0) != VK_SUCCESS);
+	crashIf(vkAllocateMemory(m_device, &allocInfo, nullptr, &result.memory) != VK_SUCCESS);
+	crashIf(vkBindBufferMemory(m_device, result.buffer, result.memory, 0) != VK_SUCCESS);
 
-	return { buf, mem };
+	return result;
 }
 
-std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createUniformBuffer(size_t bytes) {
-	return createBuffer(
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		bytes
-	);
-}
-
-std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createVertexBuffer(
-	std::vector<Vertex> const& vertices
-) {
+BufferInfo VulkanContext::createVertexBuffer(std::vector<Vertex> const& vertices) {
+	
 	auto bytes = vertices.size() * sizeof(Vertex);
 
 	// Create CPU-accessible buffer.
-	auto host = createBuffer(
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT 
-		| VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	auto host = createHostBuffer(
+		  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+		| VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
 		bytes
 	);
 
 	// Write buffer data.
-	writeDeviceMemory(std::get<VkDeviceMemory>(host), vertices.data(), bytes);
+	writeDeviceMemory(host.memory, vertices.data(), bytes);
 	
 	// Upload to GPU.
-	return uploadToDevice(host, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, bytes);
+	return uploadToDevice(host);
 }
 
-std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::createIndexBuffer(
-	std::vector<uint32_t> const& indices
-) {
+BufferInfo VulkanContext::createIndexBuffer(std::vector<uint32_t> const& indices) {
+	
 	auto bytes = indices.size() * sizeof(uint32_t);
 
 	// Create CPU-accessible buffer.
-	auto host = createBuffer(
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+	auto host = createHostBuffer(
+		  VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 		| VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		bytes
 	);
 
 	// Write buffer data.
-	writeDeviceMemory(std::get<VkDeviceMemory>(host), indices.data(), bytes);
+	writeDeviceMemory(host.memory, indices.data(), bytes);
 
 	// Upload to GPU.
-	return uploadToDevice(host, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, bytes);
+	return uploadToDevice(host);
 }
 
-void VulkanContext::destroyBuffer(std::tuple<VkBuffer, VkDeviceMemory> buffer) {
-	vkDestroyBuffer(m_device, std::get<VkBuffer>(buffer), nullptr);
-	vkFreeMemory(m_device, std::get<VkDeviceMemory>(buffer), nullptr);
+void VulkanContext::destroyBuffer(BufferInfo& info) {
+	vkDestroyBuffer(m_device, info.buffer, nullptr);
+	vkFreeMemory(m_device, info.memory, nullptr);
+	info = {};
 }
 
 void VulkanContext::flush() {
@@ -706,17 +692,14 @@ void VulkanContext::writeDeviceMemory(
 	vkUnmapMemory(m_device, mem);
 }
 
-std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::uploadToDevice(
-	std::tuple<VkBuffer, VkDeviceMemory>& host,
-	VkBufferUsageFlagBits bufferTypeFlag,
-	size_t bytes
-){
+BufferInfo VulkanContext::uploadToDevice(BufferInfo hostBufferInfo) {
+
+	auto usage = hostBufferInfo.usage;
+	usage &= ~VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
 	// Create GPU-local buffer.
-	auto [gpuBuf, gpuMem] = createBuffer(
-		bufferTypeFlag | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		bytes
-	);
+	auto deviceBufferInfo = createDeviceBuffer(usage, hostBufferInfo.sizeInBytes);
 
 	// Schedule transfer from CPU to GPU.
 
@@ -740,8 +723,8 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::uploadToDevice(
 	crashIf(VK_SUCCESS != vkBeginCommandBuffer(xferCmd, &beginInfo));
 	{
 		auto region = VkBufferCopy{};
-		region.size = bytes;
-		vkCmdCopyBuffer(xferCmd, std::get<0>(host), gpuBuf, 1, &region);
+		region.size = hostBufferInfo.sizeInBytes;
+		vkCmdCopyBuffer(xferCmd, hostBufferInfo.buffer, deviceBufferInfo.buffer, 1, &region);
 	}
 	crashIf(VK_SUCCESS != vkEndCommandBuffer(xferCmd));
 
@@ -764,12 +747,8 @@ std::tuple<VkBuffer, VkDeviceMemory> VulkanContext::uploadToDevice(
 		std::get<VkQueue>(m_queueInfo[QueueRole::Graphics]))
 	);
 
-	// Release CPU-accessible resources.
-	vkDestroyBuffer(m_device, std::get<0>(host), nullptr);
-	vkFreeMemory(m_device, std::get<1>(host), nullptr);
-
-	host = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-	return { gpuBuf, gpuMem };
+	destroyBuffer(hostBufferInfo);
+	return deviceBufferInfo;
 }
 
 void VulkanContext::createPipeline(
@@ -1057,7 +1036,7 @@ void VulkanContext::createPipeline(
 	for (auto img : range(m_swapchainImages.size())) {
 
 		auto uniformBufferInfo = VkDescriptorBufferInfo{};
-		uniformBufferInfo.buffer = std::get<VkBuffer>(m_swapchainUniformBuffers[img]);
+		uniformBufferInfo.buffer = m_swapchainUniformBuffers[img].buffer;
 		uniformBufferInfo.offset = 0;
 		uniformBufferInfo.range = m_uniformBufferSize;
 
@@ -1109,7 +1088,7 @@ void VulkanContext::createPipeline(
 
 void VulkanContext::setUniforms(ShaderUniforms const& uniforms) {
 	writeDeviceMemory(
-		std::get<VkDeviceMemory>(m_swapchainUniformBuffers[m_swapchainImageIndex]),
+		m_swapchainUniformBuffers[m_swapchainImageIndex].memory,
 		&uniforms,
 		sizeof(ShaderUniforms)
 	);
@@ -1144,9 +1123,8 @@ VulkanContext::~VulkanContext() {
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
-	for (auto [buf, mem] : m_swapchainUniformBuffers) {
-		vkDestroyBuffer(m_device, buf, nullptr);
-		vkFreeMemory(m_device, mem, nullptr);
+	for (auto ubuf : m_swapchainUniformBuffers) {
+		destroyBuffer(ubuf);
 	}
 
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);

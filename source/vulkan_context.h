@@ -12,6 +12,14 @@
 #include "common.h"
 #include "shader_interface.h"
 
+struct BufferInfo {
+	VkBuffer buffer;
+	VkDeviceMemory memory;
+	size_t sizeInBytes;
+	VkBufferUsageFlags usage;
+	VkMemoryPropertyFlags memoryProperties;
+};
+
 class VulkanContext {
 private:
 	template<typename V>
@@ -54,7 +62,7 @@ private:
 	std::vector<VkFramebuffer> m_swapchainFramebuffers;
 	std::vector<VkDescriptorSet> m_swapchainDescriptorSets;
 	std::vector<VkCommandBuffer> m_swapchainCommandBuffers;
-	std::vector<std::tuple<VkBuffer, VkDeviceMemory>> m_swapchainUniformBuffers;
+	std::vector<BufferInfo> m_swapchainUniformBuffers;
 	std::vector<VkFence> m_swapchainFences;
 	uint32_t m_swapchainImageIndex; // <- Index into resource arrays.
 
@@ -79,25 +87,31 @@ private:
 	size_t m_semaphoreIndex = 0;
 	
 private:
-	std::tuple<VkBuffer, VkDeviceMemory> createBuffer(
-		VkBufferUsageFlags usageMask,
-		VkMemoryPropertyFlags propertyMask,
-		size_t bytes
-	);
+	BufferInfo createBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps, size_t bytes);
+	
+	inline BufferInfo createHostBuffer(VkBufferUsageFlags usage, size_t bytes) {
+		return createBuffer(
+			usage, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			bytes
+		);
+	}
 
-	std::tuple<VkBuffer, VkDeviceMemory> createUniformBuffer(size_t bytes);
+	inline BufferInfo createDeviceBuffer(VkBufferUsageFlags usage, size_t bytes) {
+		return createBuffer(usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bytes); 
+	}
+
+	inline BufferInfo createUniformBuffer(size_t bytes) {
+		return createHostBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, bytes);
+	}
+
+	BufferInfo uploadToDevice(BufferInfo hostBufferInfo);
 
 	void writeDeviceMemory(
 		VkDeviceMemory& mem,
 		void const* data,
 		size_t bytes,
 		size_t offset = 0
-	);
-
-	std::tuple<VkBuffer, VkDeviceMemory> uploadToDevice(
-		std::tuple<VkBuffer, VkDeviceMemory>& host,
-		VkBufferUsageFlagBits bufferTypeFlag,
-		size_t bytes
 	);
 
 public:
@@ -121,9 +135,9 @@ public:
 		size_t pushConstantSize
 	);
 
-	std::tuple<VkBuffer, VkDeviceMemory> createVertexBuffer(std::vector<Vertex> const& vertices);
-	std::tuple<VkBuffer, VkDeviceMemory> createIndexBuffer(std::vector<uint32_t> const& indices);
-	void destroyBuffer(std::tuple<VkBuffer, VkDeviceMemory> buffer);
+	BufferInfo createVertexBuffer(std::vector<Vertex> const& vertices);
+	BufferInfo createIndexBuffer(std::vector<uint32_t> const& indices);
+	void destroyBuffer(BufferInfo& info);
 
 	void setUniforms(ShaderUniforms const& uniforms);
 	void setPushConstants(ShaderPushConstants const& push);
