@@ -21,6 +21,10 @@ void Renderer::initialize() {
 		sizeof(ShaderPushConstants)
 	);
 
+	std::array<uint32_t, 8 * 8> pixels;
+	auto txr = m_vulkanContext.createTexture(8, 8, pixels.data());
+	m_vulkanContext.destroyTexture(txr);
+
 	glfwShowWindow(m_pWindow);
 }
 

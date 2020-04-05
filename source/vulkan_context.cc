@@ -578,6 +578,32 @@ void VulkanContext::onFrameEnd() {
 	m_semaphoreIndex = (m_semaphoreIndex + 1) % m_swapchainImages.size();
 }
 
+VkDeviceMemory VulkanContext::allocateDeviceMemory(
+	VkMemoryRequirements const& memReqs,
+	VkMemoryPropertyFlags memProps
+) {
+	auto allocInfo = VkMemoryAllocateInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memReqs.size;
+	allocInfo.memoryTypeIndex = -1;
+
+	// Find suitable memory type.
+	auto const& devMemProps = m_physicalDeviceMemoryProperties.at(m_physicalDevice);
+	for (uint32_t i = 0; i < devMemProps.memoryTypeCount; ++i) {
+
+		if (!nthBitHi(memReqs.memoryTypeBits, i)) continue; // Skip types according to mask.
+
+		if (satisfiesBitMask(devMemProps.memoryTypes[i].propertyFlags, memProps)) {
+			allocInfo.memoryTypeIndex = i;
+			break;
+		}
+	}
+
+	VkDeviceMemory mem;
+	crashIf(vkAllocateMemory(m_device, &allocInfo, nullptr, &mem) != VK_SUCCESS);
+	return mem;
+}
+
 BufferInfo VulkanContext::createBuffer(
 	VkBufferUsageFlags usage,
 	VkMemoryPropertyFlags memProps,
@@ -596,33 +622,106 @@ BufferInfo VulkanContext::createBuffer(
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	bufferInfo.size = static_cast<VkDeviceSize>(bytes);
 
-	vkCreateBuffer(m_device, &bufferInfo, nullptr, &result.buffer);
+	crashIf(VK_SUCCESS != vkCreateBuffer(m_device, &bufferInfo, nullptr, &result.buffer));
 
-	auto memReqmt = VkMemoryRequirements{};
-	vkGetBufferMemoryRequirements(m_device, result.buffer, &memReqmt);
+	auto memReqs = VkMemoryRequirements{};
+	vkGetBufferMemoryRequirements(m_device, result.buffer, &memReqs);
 
-	auto allocInfo = VkMemoryAllocateInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memReqmt.size;
-	allocInfo.memoryTypeIndex = -1;
-
-	// Find suitable memory type.
-	auto const& devMemProps = m_physicalDeviceMemoryProperties.at(m_physicalDevice);
-	for (uint32_t i = 0; i < devMemProps.memoryTypeCount; ++i) {
-
-		if (!nthBitHi(memReqmt.memoryTypeBits, i)) continue; // Skip types according to mask.
-
-		if (satisfiesBitMask(devMemProps.memoryTypes[i].propertyFlags, memProps)) {
-			allocInfo.memoryTypeIndex = i;
-			break;
-		}
-	}
-
-	crashIf(vkAllocateMemory(m_device, &allocInfo, nullptr, &result.memory) != VK_SUCCESS);
+	result.memory = allocateDeviceMemory(memReqs, memProps);
 	crashIf(vkBindBufferMemory(m_device, result.buffer, result.memory, 0) != VK_SUCCESS);
 
 	return result;
 }
+
+TextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32_t const* pixels) {
+	
+	auto result = TextureInfo{};
+	result.width = width;
+	result.height = height;
+	
+	auto bytes = TextureInfo::bytesPerPixel * width * height;
+	auto staging = createHostBuffer(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+		| VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
+		bytes
+	);
+	writeDeviceMemory(staging.memory, pixels, bytes);
+
+	auto imageInfo = VkImageCreateInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.arrayLayers = 1;
+	imageInfo.extent.width = width;
+	imageInfo.extent.height = height;
+	imageInfo.extent.depth = 1;
+	imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.mipLevels = 1;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	crashIf(VK_SUCCESS != vkCreateImage(m_device, &imageInfo, nullptr, &result.image));
+
+	auto memReqs = VkMemoryRequirements{};
+	vkGetImageMemoryRequirements(m_device, result.image, &memReqs);
+
+	result.memory = allocateDeviceMemory(memReqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	crashIf(VK_SUCCESS != vkBindImageMemory(m_device, result.image, result.memory, 0));
+
+	runDeviceCommands([&](VkCommandBuffer cmdbuf) {
+
+		auto barrier = VkImageMemoryBarrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.image = result.image;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+		auto& srr = barrier.subresourceRange;
+		srr.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		srr.levelCount = 1;
+		srr.layerCount = 1;
+
+		// Transition image layout into being writeable.
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		vkCmdPipelineBarrier(
+			cmdbuf, 
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0, 0, nullptr, 0, nullptr, 
+			1, &barrier
+		);
+
+		auto region = VkBufferImageCopy{};
+		region.imageExtent = { width, height, 1 };
+
+		auto& isr = region.imageSubresource;
+		isr.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		isr.layerCount = 1;
+
+		vkCmdCopyBufferToImage(
+			cmdbuf, 
+			staging.buffer, 
+			result.image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+			1, &region
+		);
+
+		// Transition image layout into being usable by the shader.
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		vkCmdPipelineBarrier(
+			cmdbuf,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			0, 0, nullptr, 0, nullptr,
+			1, &barrier
+		);
+	});
+
+	destroyBuffer(staging);
+
+	return result;
+}
+
 
 BufferInfo VulkanContext::createVertexBuffer(std::vector<Vertex> const& vertices) {
 	
@@ -660,16 +759,6 @@ BufferInfo VulkanContext::createIndexBuffer(std::vector<uint32_t> const& indices
 	return uploadToDevice(host);
 }
 
-void VulkanContext::destroyBuffer(BufferInfo& info) {
-	vkDestroyBuffer(m_device, info.buffer, nullptr);
-	vkFreeMemory(m_device, info.memory, nullptr);
-	info = {};
-}
-
-void VulkanContext::flush() {
-	vkDeviceWaitIdle(m_device);
-}
-
 void VulkanContext::writeDeviceMemory(
 	VkDeviceMemory& mem,
 	void const* data,
@@ -692,48 +781,33 @@ void VulkanContext::writeDeviceMemory(
 	vkUnmapMemory(m_device, mem);
 }
 
-BufferInfo VulkanContext::uploadToDevice(BufferInfo hostBufferInfo) {
+void VulkanContext::runDeviceCommands(std::function<void(VkCommandBuffer)> commands) {
+	
+	auto cmdbufInfo = VkCommandBufferAllocateInfo{};
+	cmdbufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdbufInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmdbufInfo.commandPool = m_commandPool;
+	cmdbufInfo.commandBufferCount = 1;
 
-	auto usage = hostBufferInfo.usage;
-	usage &= ~VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-	// Create GPU-local buffer.
-	auto deviceBufferInfo = createDeviceBuffer(usage, hostBufferInfo.sizeInBytes);
-
-	// Schedule transfer from CPU to GPU.
-
-	auto allocInfo = VkCommandBufferAllocateInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = m_commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer xferCmd;
+	VkCommandBuffer cmdbuf;
 	crashIf(VK_SUCCESS != vkAllocateCommandBuffers(
-		m_device, 
-		&allocInfo, 
-		&xferCmd
+		m_device,
+		&cmdbufInfo,
+		&cmdbuf
 	));
 
 	auto beginInfo = VkCommandBufferBeginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-	crashIf(VK_SUCCESS != vkBeginCommandBuffer(xferCmd, &beginInfo));
-	{
-		auto region = VkBufferCopy{};
-		region.size = hostBufferInfo.sizeInBytes;
-		vkCmdCopyBuffer(xferCmd, hostBufferInfo.buffer, deviceBufferInfo.buffer, 1, &region);
-	}
-	crashIf(VK_SUCCESS != vkEndCommandBuffer(xferCmd));
-
-	// Perform transfer command.
+	crashIf(VK_SUCCESS != vkBeginCommandBuffer(cmdbuf, &beginInfo));
+	commands(cmdbuf);
+	crashIf(VK_SUCCESS != vkEndCommandBuffer(cmdbuf));
 
 	auto submitInfo = VkSubmitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &xferCmd;
+	submitInfo.pCommandBuffers = &cmdbuf;
 
 	crashIf(VK_SUCCESS != vkQueueSubmit(
 		std::get<VkQueue>(m_queueInfo[QueueRole::Graphics]),
@@ -746,6 +820,23 @@ BufferInfo VulkanContext::uploadToDevice(BufferInfo hostBufferInfo) {
 	crashIf(VK_SUCCESS != vkQueueWaitIdle(
 		std::get<VkQueue>(m_queueInfo[QueueRole::Graphics]))
 	);
+}
+
+BufferInfo VulkanContext::uploadToDevice(BufferInfo hostBufferInfo) {
+
+	auto usage = hostBufferInfo.usage;
+	usage &= ~VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+	// Create GPU-local buffer.
+	auto deviceBufferInfo = createDeviceBuffer(usage, hostBufferInfo.sizeInBytes);
+
+	// Transfer data from CPU to GPU.
+	runDeviceCommands([&](VkCommandBuffer cmdbuf) {
+		auto region = VkBufferCopy{};
+		region.size = hostBufferInfo.sizeInBytes;
+		vkCmdCopyBuffer(cmdbuf, hostBufferInfo.buffer, deviceBufferInfo.buffer, 1, &region);
+	});
 
 	destroyBuffer(hostBufferInfo);
 	return deviceBufferInfo;
@@ -930,13 +1021,8 @@ void VulkanContext::createPipeline(
 	msaaState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	msaaState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	if (m_shaders.count(vertexShaderName) == 0) {
-		loadShader(vertexShaderName);
-	}
-
-	if (m_shaders.count(fragmentShaderName) == 0) {
-		loadShader(fragmentShaderName);
-	}
+	if (!m_shaders.count(vertexShaderName)) loadShader(vertexShaderName);
+	if (!m_shaders.count(fragmentShaderName)) loadShader(fragmentShaderName);
 
 	auto stages = std::array{
 		VkPipelineShaderStageCreateInfo{

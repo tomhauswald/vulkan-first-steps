@@ -66,9 +66,6 @@ public:
 	
 	inline void updateVulkanBuffers() {
 
-		// Wait for all frames in flight to be delivered before updating.
-		m_vulkanContext.flush();
-
 		freeVulkanResources();
 
 		if (m_dirty[0]) m_vbufInfo = m_vulkanContext.createVertexBuffer(m_vertices);

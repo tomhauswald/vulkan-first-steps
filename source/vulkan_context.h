@@ -9,6 +9,8 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
+#include <png.hpp>
+
 #include "common.h"
 #include "shader_interface.h"
 
@@ -16,6 +18,17 @@ struct BufferInfo {
 	VkBuffer buffer;
 	VkDeviceMemory memory;
 	size_t sizeInBytes;
+	VkBufferUsageFlags usage;
+	VkMemoryPropertyFlags memoryProperties;
+};
+
+struct TextureInfo {
+	static constexpr uint8_t bytesPerPixel = 4; 
+	
+	VkImage image;
+	VkDeviceMemory memory;
+	uint32_t width;
+	uint32_t height;
 	VkBufferUsageFlags usage;
 	VkMemoryPropertyFlags memoryProperties;
 };
@@ -87,6 +100,8 @@ private:
 	size_t m_semaphoreIndex = 0;
 	
 private:
+	void runDeviceCommands(std::function<void(VkCommandBuffer)> commands);
+
 	BufferInfo createBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps, size_t bytes);
 	
 	inline BufferInfo createHostBuffer(VkBufferUsageFlags usage, size_t bytes) {
@@ -107,12 +122,12 @@ private:
 
 	BufferInfo uploadToDevice(BufferInfo hostBufferInfo);
 
-	void writeDeviceMemory(
-		VkDeviceMemory& mem,
-		void const* data,
-		size_t bytes,
-		size_t offset = 0
+	VkDeviceMemory allocateDeviceMemory(
+		VkMemoryRequirements const& memReqs,
+		VkMemoryPropertyFlags memProps
 	);
+
+	void writeDeviceMemory(VkDeviceMemory& mem, void const* data, size_t bytes, size_t offset = 0);
 
 public:
 	~VulkanContext();
@@ -135,9 +150,9 @@ public:
 		size_t pushConstantSize
 	);
 
+	TextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);
 	BufferInfo createVertexBuffer(std::vector<Vertex> const& vertices);
 	BufferInfo createIndexBuffer(std::vector<uint32_t> const& indices);
-	void destroyBuffer(BufferInfo& info);
 
 	void setUniforms(ShaderUniforms const& uniforms);
 	void setPushConstants(ShaderPushConstants const& push);
@@ -145,7 +160,21 @@ public:
 	void onFrameBegin();
 	void draw(VkBuffer vbuf, VkBuffer ibuf, uint32_t count);
 	void onFrameEnd();
-	void flush();
+	
+	// Wait for all frames in flight to be delivered.
+	inline void flush() { vkDeviceWaitIdle(m_device); }
+
+	inline void destroyBuffer(BufferInfo& info) {
+		vkDestroyBuffer(m_device, info.buffer, nullptr);
+		vkFreeMemory(m_device, info.memory, nullptr);
+		info = {};
+	}
+
+	inline void destroyTexture(TextureInfo& info) {
+		vkDestroyImage(m_device, info.image, nullptr);
+		vkFreeMemory(m_device, info.memory, nullptr);
+		info = {};
+	}
 };
 
 // Vulkan resource query with internal return code.
