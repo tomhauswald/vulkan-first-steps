@@ -100,7 +100,6 @@ public:
 
 		auto& texture = m_renderer.createTexture();
 		texture.updatePixelsWithImage("../assets/images/logo_transparent.png");
-		m_renderer.bindTexture(texture);
 
 		auto camera = Camera(
 			m_settings.renderer.resolution.x / (float)m_settings.renderer.resolution.y,
@@ -118,6 +117,7 @@ public:
 				uniformData.projectionMatrix = camera.projMatrix();
 				
 				m_renderer.setUniformData(uniformData);
+				m_renderer.bindTexture(texture);
 				renderCubes(m_renderer, cube);
 
 				m_renderer.endFrame();

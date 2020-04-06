@@ -1238,30 +1238,15 @@ void VulkanContext::bindTexture(VulkanTextureInfo const& txr, uint32_t slot) {
 	samplerInfo.imageView = txr.view;
 	samplerInfo.sampler = m_sampler;
 
-	auto samplerWrites = mapToVector<
-		decltype(m_swapchainDescriptorSets), 
-		VkWriteDescriptorSet
-	>(
-		m_swapchainDescriptorSets, [&](auto descset) {
-			auto write = VkWriteDescriptorSet{};
-			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			write.dstSet = descset;
-			write.descriptorCount = 1;
-			write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			write.dstBinding = 1 + slot;
-			write.pImageInfo = &samplerInfo;
-			return write;
-		}
-	); 
+	auto write = VkWriteDescriptorSet{};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = m_swapchainDescriptorSets[m_swapchainImageIndex];
+	write.descriptorCount = 1;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	write.dstBinding = 1 + slot;
+	write.pImageInfo = &samplerInfo;
 
-	flush(); // todo handle differently (maybe one sampler per swapchain image)
-	vkUpdateDescriptorSets(
-		m_device, 
-		samplerWrites.size(), 
-		samplerWrites.data(), 
-		0, 
-		nullptr
-	);
+	vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
 }
 
 VulkanContext::~VulkanContext() {
