@@ -13,17 +13,13 @@ void Renderer::initialize() {
 	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
 	m_vulkanContext.createDepthBuffer();
 	m_vulkanContext.createPipeline(
-		"vert-colored"s,
-		"frag-unshaded"s,
+		"vert-textured",
+		"frag-textured",
 		Vertex::binding(),
 		Vertex::attributes(),
 		sizeof(ShaderUniforms),
 		sizeof(ShaderPushConstants)
 	);
-
-	std::array<uint32_t, 8 * 8> pixels;
-	auto txr = m_vulkanContext.createTexture(8, 8, pixels.data());
-	m_vulkanContext.destroyTexture(txr);
 
 	glfwShowWindow(m_pWindow);
 }
@@ -63,8 +59,8 @@ void Renderer::renderMesh(Mesh const& mesh, ShaderPushConstants const& push) {
 	
 	m_vulkanContext.setPushConstants(push);
 	m_vulkanContext.draw(
-		mesh.vulkanVertexBuffer(), 
-		mesh.vulkanIndexBuffer(),
+		mesh.vulkanVertexBuffer().buffer, 
+		mesh.vulkanIndexBuffer().buffer,
 		static_cast<uint32_t>(mesh.vertices().size())
 	);
 }

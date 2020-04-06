@@ -14,23 +14,27 @@
 #include "common.h"
 #include "shader_interface.h"
 
-struct BufferInfo {
-	VkBuffer buffer;
-	VkDeviceMemory memory;
+struct VulkanBufferInfo {
+	
 	size_t sizeInBytes;
+	
+	VkBuffer buffer;
 	VkBufferUsageFlags usage;
+	
+	VkDeviceMemory memory;
 	VkMemoryPropertyFlags memoryProperties;
 };
 
-struct TextureInfo {
+struct VulkanTextureInfo {
+
 	static constexpr uint8_t bytesPerPixel = 4; 
 	
-	VkImage image;
-	VkDeviceMemory memory;
 	uint32_t width;
 	uint32_t height;
-	VkBufferUsageFlags usage;
-	VkMemoryPropertyFlags memoryProperties;
+
+	VkImage image;
+	VkImageView view;
+	VkDeviceMemory memory;
 };
 
 class VulkanContext {
@@ -75,7 +79,7 @@ private:
 	std::vector<VkFramebuffer> m_swapchainFramebuffers;
 	std::vector<VkDescriptorSet> m_swapchainDescriptorSets;
 	std::vector<VkCommandBuffer> m_swapchainCommandBuffers;
-	std::vector<BufferInfo> m_swapchainUniformBuffers;
+	std::vector<VulkanBufferInfo> m_swapchainUniformBuffers;
 	std::vector<VkFence> m_swapchainFences;
 	uint32_t m_swapchainImageIndex; // <- Index into resource arrays.
 
@@ -95,6 +99,7 @@ private:
 	VkDescriptorPool m_descriptorPool;
 	size_t m_uniformBufferSize;
 	size_t m_pushConstantSize;
+	VkSampler m_sampler;
 
 	std::vector<std::unordered_map<DeviceEvent, VkSemaphore>> m_semaphores;
 	size_t m_semaphoreIndex = 0;
@@ -102,9 +107,9 @@ private:
 private:
 	void runDeviceCommands(std::function<void(VkCommandBuffer)> commands);
 
-	BufferInfo createBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps, size_t bytes);
+	VulkanBufferInfo createBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps, size_t bytes);
 	
-	inline BufferInfo createHostBuffer(VkBufferUsageFlags usage, size_t bytes) {
+	inline VulkanBufferInfo createHostBuffer(VkBufferUsageFlags usage, size_t bytes) {
 		return createBuffer(
 			usage, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -112,15 +117,15 @@ private:
 		);
 	}
 
-	inline BufferInfo createDeviceBuffer(VkBufferUsageFlags usage, size_t bytes) {
+	inline VulkanBufferInfo createDeviceBuffer(VkBufferUsageFlags usage, size_t bytes) {
 		return createBuffer(usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bytes); 
 	}
 
-	inline BufferInfo createUniformBuffer(size_t bytes) {
+	inline VulkanBufferInfo createUniformBuffer(size_t bytes) {
 		return createHostBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, bytes);
 	}
 
-	BufferInfo uploadToDevice(BufferInfo hostBufferInfo);
+	VulkanBufferInfo uploadToDevice(VulkanBufferInfo hostBufferInfo);
 
 	VkDeviceMemory allocateDeviceMemory(
 		VkMemoryRequirements const& memReqs,
@@ -150,27 +155,31 @@ public:
 		size_t pushConstantSize
 	);
 
-	TextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);
-	BufferInfo createVertexBuffer(std::vector<Vertex> const& vertices);
-	BufferInfo createIndexBuffer(std::vector<uint32_t> const& indices);
+	VulkanTextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);
+	VulkanBufferInfo createVertexBuffer(std::vector<Vertex> const& vertices);
+	VulkanBufferInfo createIndexBuffer(std::vector<uint32_t> const& indices);
 
 	void setUniforms(ShaderUniforms const& uniforms);
 	void setPushConstants(ShaderPushConstants const& push);
+	void bindTexture(VulkanTextureInfo const& txr, uint32_t slot = 0);
 
 	void onFrameBegin();
 	void draw(VkBuffer vbuf, VkBuffer ibuf, uint32_t count);
 	void onFrameEnd();
 	
 	// Wait for all frames in flight to be delivered.
-	inline void flush() { vkDeviceWaitIdle(m_device); }
+	inline void flush() { 
+		vkDeviceWaitIdle(m_device); 
+	}
 
-	inline void destroyBuffer(BufferInfo& info) {
+	inline void destroyBuffer(VulkanBufferInfo& info) {
 		vkDestroyBuffer(m_device, info.buffer, nullptr);
 		vkFreeMemory(m_device, info.memory, nullptr);
 		info = {};
 	}
 
-	inline void destroyTexture(TextureInfo& info) {
+	inline void destroyTexture(VulkanTextureInfo& info) {
+		vkDestroyImageView(m_device, info.view, nullptr);
 		vkDestroyImage(m_device, info.image, nullptr);
 		vkFreeMemory(m_device, info.memory, nullptr);
 		info = {};

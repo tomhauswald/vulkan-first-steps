@@ -228,6 +228,24 @@ void VulkanContext::createDevice() {
 	));
 }
 
+VkImageView createImageView(VkDevice device, VkImage image, VkFormat format) {
+	
+	auto createInfo = VkImageViewCreateInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	createInfo.image = image;
+	createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	createInfo.format = format;
+
+	auto& srr = createInfo.subresourceRange;
+	srr.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	srr.levelCount = 1;
+	srr.layerCount = 1;
+
+	VkImageView view;
+	crashIf(vkCreateImageView(device, &createInfo, nullptr, &view) != VK_SUCCESS);
+	return view;
+}
+
 void VulkanContext::createSwapchain(bool vsync) {
 
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
@@ -291,29 +309,14 @@ void VulkanContext::createSwapchain(bool vsync) {
 	std::cout << "Created swapchain with " << m_swapchainImages.size() << " images." << lf;
 
 	// Create image views for each swapchain image.
-
 	m_swapchainImageViews = mapToVector<decltype(m_swapchainImages), VkImageView>(
 		m_swapchainImages,
-		[&](auto image) {
-			VkImageViewCreateInfo createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = image;
-			createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			createInfo.format = VK_FORMAT_B8G8R8A8_SRGB;
-
-			auto& srr = createInfo.subresourceRange;
-			srr.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			srr.levelCount = 1;
-			srr.layerCount = 1;
-
-			VkImageView view;
-			crashIf(vkCreateImageView(m_device, &createInfo, nullptr, &view) != VK_SUCCESS);
-			return view;
+		[&](auto image) { 
+			return createImageView(m_device, image, swapchainInfo.imageFormat); 
 		}
 	);
 
 	// Allocate command buffers for each swapchain image.
-
 	auto allocateInfo = VkCommandBufferAllocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocateInfo.commandPool = m_commandPool;
@@ -604,12 +607,12 @@ VkDeviceMemory VulkanContext::allocateDeviceMemory(
 	return mem;
 }
 
-BufferInfo VulkanContext::createBuffer(
+VulkanBufferInfo VulkanContext::createBuffer(
 	VkBufferUsageFlags usage,
 	VkMemoryPropertyFlags memProps,
 	size_t bytes
 ) {
-	BufferInfo result;
+	VulkanBufferInfo result;
 	result.usage = usage;
 	result.memoryProperties = memProps;
 	result.sizeInBytes = bytes;
@@ -633,13 +636,13 @@ BufferInfo VulkanContext::createBuffer(
 	return result;
 }
 
-TextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32_t const* pixels) {
+VulkanTextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32_t const* pixels) {
 	
-	auto result = TextureInfo{};
+	auto result = VulkanTextureInfo{};
 	result.width = width;
 	result.height = height;
 	
-	auto bytes = TextureInfo::bytesPerPixel * width * height;
+	auto bytes = VulkanTextureInfo::bytesPerPixel * width * height;
 	auto staging = createHostBuffer(
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT
 		| VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
@@ -667,12 +670,12 @@ TextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32
 	result.memory = allocateDeviceMemory(memReqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	crashIf(VK_SUCCESS != vkBindImageMemory(m_device, result.image, result.memory, 0));
 
+	// Copy staging buffer into texture.
 	runDeviceCommands([&](VkCommandBuffer cmdbuf) {
 
 		auto barrier = VkImageMemoryBarrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.image = result.image;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
 		auto& srr = barrier.subresourceRange;
 		srr.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -682,6 +685,8 @@ TextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32
 		// Transition image layout into being writeable.
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		
 		vkCmdPipelineBarrier(
 			cmdbuf, 
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -708,6 +713,8 @@ TextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32
 		// Transition image layout into being usable by the shader.
 		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		
 		vkCmdPipelineBarrier(
 			cmdbuf,
 			VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -719,11 +726,12 @@ TextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, uint32
 
 	destroyBuffer(staging);
 
+	result.view = createImageView(m_device, result.image, imageInfo.format);
+
 	return result;
 }
 
-
-BufferInfo VulkanContext::createVertexBuffer(std::vector<Vertex> const& vertices) {
+VulkanBufferInfo VulkanContext::createVertexBuffer(std::vector<Vertex> const& vertices) {
 	
 	auto bytes = vertices.size() * sizeof(Vertex);
 
@@ -741,7 +749,7 @@ BufferInfo VulkanContext::createVertexBuffer(std::vector<Vertex> const& vertices
 	return uploadToDevice(host);
 }
 
-BufferInfo VulkanContext::createIndexBuffer(std::vector<uint32_t> const& indices) {
+VulkanBufferInfo VulkanContext::createIndexBuffer(std::vector<uint32_t> const& indices) {
 	
 	auto bytes = indices.size() * sizeof(uint32_t);
 
@@ -822,7 +830,7 @@ void VulkanContext::runDeviceCommands(std::function<void(VkCommandBuffer)> comma
 	);
 }
 
-BufferInfo VulkanContext::uploadToDevice(BufferInfo hostBufferInfo) {
+VulkanBufferInfo VulkanContext::uploadToDevice(VulkanBufferInfo hostBufferInfo) {
 
 	auto usage = hostBufferInfo.usage;
 	usage &= ~VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -957,10 +965,18 @@ void VulkanContext::createPipeline(
 	uniformBinding.descriptorCount = 1;
 	uniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+	auto samplerBinding = VkDescriptorSetLayoutBinding{};
+	samplerBinding.binding = 1;
+	samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerBinding.descriptorCount = 1;
+	samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	auto bindings = { uniformBinding, samplerBinding };
+	
 	auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{};
 	setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setLayoutInfo.bindingCount = 1;
-	setLayoutInfo.pBindings = &uniformBinding;
+	setLayoutInfo.bindingCount = std::size(bindings);
+	setLayoutInfo.pBindings = std::data(bindings);
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
 		m_device,
@@ -1087,16 +1103,22 @@ void VulkanContext::createPipeline(
 		m_swapchainUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
 	}
 
-	// Create descriptor pool for uniform buffers.
+	// Create descriptor pools.
 
-	auto descPoolSize = VkDescriptorPoolSize{};
-	descPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+	auto uniformPoolSize = VkDescriptorPoolSize{};
+	uniformPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uniformPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+
+	auto samplerPoolSize = VkDescriptorPoolSize{};
+	samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+
+	auto poolSizes = { uniformPoolSize, samplerPoolSize };
 
 	auto descPoolInfo = VkDescriptorPoolCreateInfo{};
 	descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	descPoolInfo.poolSizeCount = 1;
-	descPoolInfo.pPoolSizes = &descPoolSize;
+	descPoolInfo.poolSizeCount = std::size(poolSizes);
+	descPoolInfo.pPoolSizes = std::data(poolSizes);
 	descPoolInfo.maxSets = static_cast<uint32_t>(m_swapchainImages.size());
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorPool(
@@ -1119,23 +1141,41 @@ void VulkanContext::createPipeline(
 	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
 	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
 
-	for (auto img : range(m_swapchainImages.size())) {
+	auto uniformWrites = mapToVector<
+		decltype(range(0)),
+		VkWriteDescriptorSet
+	>(
+		range(m_swapchainImages.size()),
+		[&](auto imageIndex) {
 
-		auto uniformBufferInfo = VkDescriptorBufferInfo{};
-		uniformBufferInfo.buffer = m_swapchainUniformBuffers[img].buffer;
-		uniformBufferInfo.offset = 0;
-		uniformBufferInfo.range = m_uniformBufferSize;
+			auto uniformBufferInfo = VkDescriptorBufferInfo{};
+			uniformBufferInfo.buffer = m_swapchainUniformBuffers[imageIndex].buffer;
+			uniformBufferInfo.offset = 0;
+			uniformBufferInfo.range = m_uniformBufferSize;
 
-		auto writeInfo = VkWriteDescriptorSet{};
-		writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writeInfo.descriptorCount = 1;
-		writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		writeInfo.dstBinding = 0;
-		writeInfo.dstSet = m_swapchainDescriptorSets[img];
-		writeInfo.pBufferInfo = &uniformBufferInfo;
+			auto uniformWrite = VkWriteDescriptorSet{};
+			uniformWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			uniformWrite.descriptorCount = 1;
+			uniformWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			uniformWrite.dstBinding = 0;
+			uniformWrite.dstSet = m_swapchainDescriptorSets[imageIndex];
+			uniformWrite.pBufferInfo = &uniformBufferInfo;
 
-		vkUpdateDescriptorSets(m_device, 1, &writeInfo, 0, nullptr);
-	}
+			return uniformWrite;
+		}
+	);
+	vkUpdateDescriptorSets(m_device, uniformWrites.size(), uniformWrites.data(), 0, nullptr);
+
+	// Create sampler.
+
+	auto samplerInfo = VkSamplerCreateInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.maxAnisotropy = 1.0f;
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	
+	crashIf(VK_SUCCESS != vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sampler));
 
 	// Create synchronization means.
 
@@ -1191,6 +1231,39 @@ void VulkanContext::setPushConstants(ShaderPushConstants const& push) {
 	);
 }
 
+void VulkanContext::bindTexture(VulkanTextureInfo const& txr, uint32_t slot) {
+
+	auto samplerInfo = VkDescriptorImageInfo{};
+	samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	samplerInfo.imageView = txr.view;
+	samplerInfo.sampler = m_sampler;
+
+	auto samplerWrites = mapToVector<
+		decltype(m_swapchainDescriptorSets), 
+		VkWriteDescriptorSet
+	>(
+		m_swapchainDescriptorSets, [&](auto descset) {
+			auto write = VkWriteDescriptorSet{};
+			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write.dstSet = descset;
+			write.descriptorCount = 1;
+			write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			write.dstBinding = 1 + slot;
+			write.pImageInfo = &samplerInfo;
+			return write;
+		}
+	); 
+
+	flush(); // todo handle differently (maybe one sampler per swapchain image)
+	vkUpdateDescriptorSets(
+		m_device, 
+		samplerWrites.size(), 
+		samplerWrites.data(), 
+		0, 
+		nullptr
+	);
+}
+
 VulkanContext::~VulkanContext() {
 
 	for (auto& pair : m_semaphores) {
@@ -1232,6 +1305,7 @@ VulkanContext::~VulkanContext() {
 		vkDestroyImageView(m_device, view, nullptr);
 	}
 
+	vkDestroySampler(m_device, m_sampler, nullptr);
 	vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 	vkDestroyDevice(m_device, nullptr);
 	vkDestroySurfaceKHR(m_instance, m_windowSurface, nullptr);
