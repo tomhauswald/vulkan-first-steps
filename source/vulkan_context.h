@@ -28,13 +28,16 @@ struct VulkanBufferInfo {
 struct VulkanTextureInfo {
 
 	static constexpr uint8_t bytesPerPixel = 4; 
-	
+	static constexpr uint8_t numSlots = 4;
+
 	uint32_t width;
 	uint32_t height;
 
 	VkImage image;
 	VkImageView view;
 	VkDeviceMemory memory;
+
+	std::array<VkDescriptorSet, numSlots> samplerSlotDescriptorSets;
 };
 
 class VulkanContext {
@@ -73,11 +76,14 @@ private:
 		std::tuple<uint32_t, VkQueue>
 	> m_queueInfo;
 
+	std::vector<std::unordered_map<DeviceEvent, VkSemaphore>> m_semaphores;
+	size_t m_semaphoreIndex = 0;
+
 	VkSwapchainKHR m_swapchain;
 	std::vector<VkImage> m_swapchainImages;
 	std::vector<VkImageView> m_swapchainImageViews;
 	std::vector<VkFramebuffer> m_swapchainFramebuffers;
-	std::vector<VkDescriptorSet> m_swapchainDescriptorSets;
+	std::vector<VkDescriptorSet> m_swapchainUniformDescriptorSets;
 	std::vector<VkCommandBuffer> m_swapchainCommandBuffers;
 	std::vector<VulkanBufferInfo> m_swapchainUniformBuffers;
 	std::vector<VkFence> m_swapchainFences;
@@ -94,15 +100,19 @@ private:
 	VkRenderPass m_renderPass;
 	VkPipeline m_pipeline;
 	VkCommandPool m_commandPool;
-	VkDescriptorSetLayout m_setLayout;
 
 	VkDescriptorPool m_descriptorPool;
+	VkDescriptorSetLayout m_uniformDescriptorSetLayout;
+	VkDescriptorSetLayout m_samplerDescriptorSetLayout;
+	VkSampler m_sampler;
+	
+	std::array<
+		VulkanTextureInfo const*, 
+		VulkanTextureInfo::numSlots
+	> m_boundTextures;
+
 	size_t m_uniformBufferSize;
 	size_t m_pushConstantSize;
-	VkSampler m_sampler;
-
-	std::vector<std::unordered_map<DeviceEvent, VkSemaphore>> m_semaphores;
-	size_t m_semaphoreIndex = 0;
 	
 private:
 	void runDeviceCommands(std::function<void(VkCommandBuffer)> commands);
@@ -161,7 +171,7 @@ public:
 
 	void setUniforms(ShaderUniforms const& uniforms);
 	void setPushConstants(ShaderPushConstants const& push);
-	void bindTexture(VulkanTextureInfo const& txr, uint32_t slot = 0);
+	void bindTextureSlot(uint8_t slot, VulkanTextureInfo const& txr);
 
 	void onFrameBegin();
 	void draw(VkBuffer vbuf, VkBuffer ibuf, uint32_t count);

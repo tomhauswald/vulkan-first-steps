@@ -6,7 +6,7 @@ layout(location = 1) in vec2 fragmentUV;
 
 layout(location = 0) out vec4 displayColor;
 
-layout(binding = 1) uniform sampler2D colorMap;
+layout(set = 1, binding = 0) uniform sampler2D colorMap;
 
 void main() {
 	displayColor = vec4(fragmentColor, 1.0) * texture(colorMap, fragmentUV);

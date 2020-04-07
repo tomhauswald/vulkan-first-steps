@@ -520,10 +520,12 @@ void VulkanContext::onFrameBegin() {
 		m_pipelineLayout,
 		0,
 		1,
-		&m_swapchainDescriptorSets[m_swapchainImageIndex],
+		&m_swapchainUniformDescriptorSets[m_swapchainImageIndex],
 		0,
 		nullptr
 	);
+
+	m_boundTextures = { nullptr };
 }
 
 void VulkanContext::draw(VkBuffer vbuf, VkBuffer ibuf, uint32_t count) {
@@ -730,6 +732,36 @@ VulkanTextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, 
 	destroyBuffer(staging);
 
 	result.view = createImageView(m_device, result.image, imageInfo.format);
+	
+	auto layouts = repeat(m_samplerDescriptorSetLayout, VulkanTextureInfo::numSlots);
+	auto setAllocInfo = VkDescriptorSetAllocateInfo{};
+	setAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	setAllocInfo.descriptorPool = m_descriptorPool;
+	setAllocInfo.descriptorSetCount = layouts.size();
+	setAllocInfo.pSetLayouts = layouts.data();
+
+	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(
+		m_device,
+		&setAllocInfo,
+		std::data(result.samplerSlotDescriptorSets)
+	));
+
+	auto samplerInfo = VkDescriptorImageInfo{};
+	samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	samplerInfo.imageView = result.view;
+	samplerInfo.sampler = m_sampler;
+
+	for (auto slot : range(VulkanTextureInfo::numSlots)) {
+		auto write = VkWriteDescriptorSet{};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.dstSet = result.samplerSlotDescriptorSets[slot];
+		write.descriptorCount = 1;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		write.dstBinding = 0;
+		write.pImageInfo = &samplerInfo;
+	
+		vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+	}
 
 	return result;
 }
@@ -962,31 +994,67 @@ void VulkanContext::createPipeline(
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
+
+	// Create descriptor set layouts.
+
+	auto dsLayoutCreateInfo = VkDescriptorSetLayoutCreateInfo{};
+	dsLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dsLayoutCreateInfo.bindingCount = 1;
+
 	auto uniformBinding = VkDescriptorSetLayoutBinding{};
 	uniformBinding.binding = 0;
 	uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uniformBinding.descriptorCount = 1;
 	uniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+	dsLayoutCreateInfo.pBindings = &uniformBinding;
+	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
+		m_device,
+		&dsLayoutCreateInfo,
+		nullptr,
+		&m_uniformDescriptorSetLayout
+	));
+
 	auto samplerBinding = VkDescriptorSetLayoutBinding{};
-	samplerBinding.binding = 1;
+	samplerBinding.binding = 0;
 	samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	samplerBinding.descriptorCount = 1;
 	samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	auto bindings = { uniformBinding, samplerBinding };
-	
-	auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{};
-	setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setLayoutInfo.bindingCount = std::size(bindings);
-	setLayoutInfo.pBindings = std::data(bindings);
-
+	dsLayoutCreateInfo.pBindings = &samplerBinding;
 	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
 		m_device,
-		&setLayoutInfo,
+		&dsLayoutCreateInfo,
 		nullptr,
-		&m_setLayout
+		&m_samplerDescriptorSetLayout
 	));
+
+	auto pushConstantRange = VkPushConstantRange{};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = m_pushConstantSize;
+
+	auto descriptorSetLayouts = std::vector{ m_uniformDescriptorSetLayout };
+	for (auto const& layout : repeat(m_samplerDescriptorSetLayout, VulkanTextureInfo::numSlots)) {
+		descriptorSetLayouts.push_back(layout);
+	}
+
+	auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = std::size(descriptorSetLayouts);
+	pipelineLayoutInfo.pSetLayouts = std::data(descriptorSetLayouts);
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
+		m_device,
+		&pipelineLayoutInfo,
+		nullptr,
+		&m_pipelineLayout
+	));
+
+
+	// Setup pipeline stages.
 
 	auto viewport = VkViewport{};
 	viewport.x = 0.0f;
@@ -1058,25 +1126,6 @@ void VulkanContext::createPipeline(
 		}
 	};
 
-	auto pushConstantRange = VkPushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	pushConstantRange.offset = 0;
-	pushConstantRange.size = m_pushConstantSize;
-
-	auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &m_setLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-
-	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
-		m_device,
-		&pipelineLayoutInfo,
-		nullptr,
-		&m_pipelineLayout
-	));
-
 	auto pipelineInfo = VkGraphicsPipelineCreateInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.layout = m_pipelineLayout;
@@ -1110,11 +1159,11 @@ void VulkanContext::createPipeline(
 
 	auto uniformPoolSize = VkDescriptorPoolSize{};
 	uniformPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uniformPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+	uniformPoolSize.descriptorCount = 256; //static_cast<uint32_t>(m_swapchainImages.size());
 
 	auto samplerPoolSize = VkDescriptorPoolSize{};
 	samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerPoolSize.descriptorCount = static_cast<uint32_t>(m_swapchainImages.size());
+	samplerPoolSize.descriptorCount = 256; // static_cast<uint32_t>(m_swapchainImages.size());
 
 	auto poolSizes = { uniformPoolSize, samplerPoolSize };
 
@@ -1122,7 +1171,7 @@ void VulkanContext::createPipeline(
 	descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	descPoolInfo.poolSizeCount = std::size(poolSizes);
 	descPoolInfo.pPoolSizes = std::data(poolSizes);
-	descPoolInfo.maxSets = static_cast<uint32_t>(m_swapchainImages.size());
+	descPoolInfo.maxSets = 512;
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorPool(
 		m_device,
@@ -1133,16 +1182,16 @@ void VulkanContext::createPipeline(
 
 	// Create descriptor sets for the uniform buffers.
 	
-	auto setLayouts = repeat(m_setLayout, m_swapchainImages.size());
+	auto uniformDescSetLayouts = repeat(m_uniformDescriptorSetLayout, m_swapchainImages.size());
 	
 	auto descSetInfo = VkDescriptorSetAllocateInfo{};
 	descSetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	descSetInfo.descriptorPool = m_descriptorPool;
 	descSetInfo.descriptorSetCount = static_cast<uint32_t>(m_swapchainImages.size());
-	descSetInfo.pSetLayouts = setLayouts.data();
+	descSetInfo.pSetLayouts = uniformDescSetLayouts.data();
 
-	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
-	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
+	m_swapchainUniformDescriptorSets.resize(m_swapchainImages.size());
+	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainUniformDescriptorSets.data()));
 
 	auto uniformInfos = std::vector<VkDescriptorBufferInfo>(m_swapchainImages.size());
 	auto uniformWrites = std::vector<VkWriteDescriptorSet>(m_swapchainImages.size());
@@ -1156,7 +1205,7 @@ void VulkanContext::createPipeline(
 		uniformWrites[i].descriptorCount = 1;
 		uniformWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		uniformWrites[i].dstBinding = 0;
-		uniformWrites[i].dstSet = m_swapchainDescriptorSets[i];
+		uniformWrites[i].dstSet = m_swapchainUniformDescriptorSets[i];
 		uniformWrites[i].pBufferInfo = &uniformInfos[i];
 	}
 	vkUpdateDescriptorSets(m_device, uniformWrites.size(), uniformWrites.data(), 0, nullptr);
@@ -1226,22 +1275,20 @@ void VulkanContext::setPushConstants(ShaderPushConstants const& push) {
 	);
 }
 
-void VulkanContext::bindTexture(VulkanTextureInfo const& txr, uint32_t slot) {
-
-	auto samplerInfo = VkDescriptorImageInfo{};
-	samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	samplerInfo.imageView = txr.view;
-	samplerInfo.sampler = m_sampler;
-
-	auto write = VkWriteDescriptorSet{};
-	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	write.dstSet = m_swapchainDescriptorSets[m_swapchainImageIndex];
-	write.descriptorCount = 1;
-	write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	write.dstBinding = 1 + slot;
-	write.pImageInfo = &samplerInfo;
-
-	vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+void VulkanContext::bindTextureSlot(uint8_t slot, VulkanTextureInfo const& txr) {
+	if (m_boundTextures[slot] != &txr) {
+		vkCmdBindDescriptorSets(
+			m_swapchainCommandBuffers[m_swapchainImageIndex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_pipelineLayout,
+			1 + slot,
+			1,
+			&txr.samplerSlotDescriptorSets[slot],
+			0,
+			nullptr
+		);
+		m_boundTextures[slot] = &txr;
+	}
 }
 
 VulkanContext::~VulkanContext() {
@@ -1267,7 +1314,8 @@ VulkanContext::~VulkanContext() {
 	}
 
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
-	vkDestroyDescriptorSetLayout(m_device, m_setLayout, nullptr);
+	vkDestroyDescriptorSetLayout(m_device, m_uniformDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(m_device, m_samplerDescriptorSetLayout, nullptr);
 	vkDestroyPipeline(m_device, m_pipeline, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);

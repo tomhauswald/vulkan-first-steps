@@ -16,11 +16,12 @@ struct RendererSettings {
 class Renderer {
 private:
 	RendererSettings m_settings;
+	float m_aspectRatio;
 
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
-	Mesh m_fsqMesh;
+	Mesh m_unitQuad, m_viewportQuad;
 	std::vector<std::unique_ptr<Mesh>> m_meshes;
 	std::vector<std::unique_ptr<Texture>> m_textures;
 
@@ -31,9 +32,11 @@ private:
 public:
 	inline Renderer(RendererSettings const& settings) :
 		m_settings{ settings },
+		m_aspectRatio{ settings.resolution.x / (float)settings.resolution.y },
 		m_vulkanContext{},
 		m_pWindow{},
-		m_fsqMesh{ m_vulkanContext },
+		m_unitQuad{ m_vulkanContext },
+		m_viewportQuad{ m_vulkanContext },
 		m_uniforms{} {
 	}
 	
@@ -58,8 +61,8 @@ public:
 		return *m_textures.back();
 	}
 
-	inline void bindTexture(Texture const& txr, uint32_t slot = 0) {
-		m_vulkanContext.bindTexture(txr.vulkanTexture(), slot);
+	inline void bindTextureSlot(uint8_t slot, Texture const& txr) {
+		m_vulkanContext.bindTextureSlot(slot, txr.vulkanTexture());
 	}
 
 	inline bool isWindowOpen() const {
@@ -80,14 +83,20 @@ public:
 	}
 
 	inline void renderSprite(Sprite const& sprite) {
+		
 		auto push = ShaderPushConstants{};
 		push.modelMatrix = glm::translate(glm::vec3{
 			sprite.bounds().x,
 			sprite.bounds().y,
 			0.0f
+		}) * glm::scale(glm::vec3{
+			sprite.bounds().w,
+			sprite.bounds().h,
+			1.0f
 		});
-		bindTexture(*sprite.texture());
-		renderMesh(m_fsqMesh, push);
+		
+		bindTextureSlot(0, sprite.texture());
+		renderMesh(m_unitQuad, push);
 	}
 
 	inline bool tryBeginFrame() {
@@ -95,7 +104,6 @@ public:
 			m_vulkanContext.flush();
 			return false;
 		}
-		m_vulkanContext.setUniforms(m_uniforms);
 		m_vulkanContext.onFrameBegin();
 		return true;
 	}
@@ -104,5 +112,8 @@ public:
 		m_vulkanContext.onFrameEnd();
 	}
 
-	SETTER(setCameraTransform, m_uniforms.cameraTransform)
+	inline void setCameraTransform(glm::mat4 cameraTransform) {
+		m_uniforms.cameraTransform = std::move(cameraTransform);
+		m_vulkanContext.setUniforms(m_uniforms);
+	}
 };

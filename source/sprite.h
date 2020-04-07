@@ -25,69 +25,37 @@ private:
 	Rectf m_bounds;
 	Rectf m_textureArea;
 	float m_drawOrder;
-	Texture const* m_pTexture;
+	Texture const& m_texture;
 
 public:
-	inline Sprite() :
-		m_bounds{ 0,0,32,32 },
-		m_textureArea{ 0,0,1,1 },
-		m_drawOrder{ 0 },
-		m_pTexture{ nullptr } {
-	}
-
 	inline Sprite(Texture const& texture) :
 		m_bounds{ 
-			0, 
-			0, 
+			0.0f,
+			0.0f,
 			static_cast<float>(texture.width()), 
 			static_cast<float>(texture.height()) 
 		},
 		m_textureArea{ 0,0,1,1 },
 		m_drawOrder{ 0 },
-		m_pTexture{ &texture } {
+		m_texture{ texture } {
 	}
 
-	inline Rectf const& bounds() const noexcept { 
-		return m_bounds; 
-	}
+	GETTER(bounds, m_bounds)
+	GETTER(textureArea, m_textureArea)
+	GETTER(drawOrder, m_drawOrder)
+	GETTER(texture, m_texture)
 
-	inline Rectf const& textureArea() const noexcept { 
-		return m_textureArea;
-	}
+	SETTER(setBounds, m_bounds)
+	SETTER(setTextureArea, m_textureArea)
+	SETTER(setDrawOrder, m_drawOrder)
 
-	inline float drawOrder() const noexcept { 
-		return m_drawOrder; 
-	}
-
-	inline Texture const* texture() const noexcept { 
-		return m_pTexture; 
-	}
-
-	/*
 	inline void setPosition(glm::vec2 const& pos) noexcept { 
-		m_bounds.x = pos.x; 
+		m_bounds.x = pos.x;
 		m_bounds.y = pos.y; 
 	}
 
 	inline void setExtent(glm::vec2 const& ext) noexcept {
 		m_bounds.w = ext.x;
 		m_bounds.h = ext.y;
-	}
-	*/
-
-	inline void setBounds(Rectf bounds) noexcept { 
-		m_bounds = std::move(bounds); 
-	}
-
-	inline void setTextureArea(Rectf area) noexcept {
-		m_textureArea = std::move(area); 
-	}
-
-	inline void setDrawOrder(float order) noexcept {
-		m_drawOrder = order; 
-	}
-
-	inline void setTexture(Texture const& texture) noexcept { 
-		m_pTexture = &texture; 
 	}
 };

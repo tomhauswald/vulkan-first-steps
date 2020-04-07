@@ -21,7 +21,7 @@ void Renderer::initialize() {
 
 	auto w = m_settings.resolution.x;
 	auto h = m_settings.resolution.y;
-	m_fsqMesh.setVertices({
+	m_viewportQuad.setVertices({
 		{ {0, 0, 0}, {1,1,1}, {0,0} },
 		{ {w, 0, 0}, {1,1,1}, {1,0} },
 		{ {w, h, 0}, {1,1,1}, {1,1} },
@@ -29,6 +29,15 @@ void Renderer::initialize() {
 		{ {0, h, 0}, {1,1,1}, {0,1} },
 		{ {0, 0, 0}, {1,1,1}, {0,0} },
 	});
+
+	m_unitQuad.setVertices({
+		{ {0, 0, 0}, {1,1,1}, {0,0} },
+		{ {1, 0, 0}, {1,1,1}, {1,0} },
+		{ {1, 1, 0}, {1,1,1}, {1,1} },
+		{ {1, 1, 0}, {1,1,1}, {1,1} },
+		{ {0, 1, 0}, {1,1,1}, {0,1} },
+		{ {0, 0, 0}, {1,1,1}, {0,0} },
+		});
 
 	glfwShowWindow(m_pWindow);
 }

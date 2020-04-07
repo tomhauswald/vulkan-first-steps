@@ -97,38 +97,38 @@ public:
 		m_renderer.initialize();
 
 		auto const& cube = createCubeMesh(m_renderer);
-		
-		auto& texture = m_renderer.createTexture();
-		texture.updatePixelsWithImage("../assets/images/coffee.png");
-		auto sprite = Sprite(texture);
 
-#ifdef D3
-		auto camera = Camera3d(
-			m_settings.renderer.resolution.x / (float)m_settings.renderer.resolution.y,
-			45.0f
-		);
-		camera.setPosition({ 0.0f, 0.0f, -10.0f });
-		camera.lookAt({ 0.0f, 0.0f, 0.0f });
-#else
-		auto camera = Camera2d({
+		auto& texture = m_renderer.createTexture();
+		texture.updatePixelsWithImage("../assets/images/3.png");
+
+		auto sprites = std::vector(4096, Sprite(texture));
+
+		auto width = static_cast<float>(m_settings.renderer.resolution.x);
+		auto height = static_cast<float>(m_settings.renderer.resolution.y);
+
+		auto cam3d = Camera3d(width / height, 45.0f);
+		cam3d.setPosition({ 0.0f, 0.0f, -10.0f });
+		cam3d.lookAt({ 0.0f, 0.0f, 0.0f });
+	
+		auto cam2d = Camera2d({
 			m_settings.renderer.resolution.x,
 			m_settings.renderer.resolution.y
 		});
-#endif
 
 		while (m_renderer.isWindowOpen()) {
 
 			if (m_renderer.tryBeginFrame()) {
 
-				m_renderer.setCameraTransform(camera.transform());
-
-#ifdef D3
-				m_renderer.bindTexture(texture);
-				renderCubes(m_renderer, cube);
-#else
-				m_renderer.renderSprite(sprite);
-#endif
-
+				m_renderer.setCameraTransform(cam2d.transform());
+				
+				for (auto& sprite : sprites) {
+					sprite.setPosition({ 
+						(width-sprite.bounds().w) * rand() / RAND_MAX,
+						(height-sprite.bounds().h) * rand() / RAND_MAX 
+					});
+					m_renderer.renderSprite(sprite);
+				}
+				
 				m_renderer.endFrame();
 			}
 
