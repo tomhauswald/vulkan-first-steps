@@ -16,12 +16,7 @@ public:
 	}
 
 	inline glm::mat4 transform() const {
-		return glm::ortho(
-			m_position.x,
-			m_position.x + m_viewportSize.x,
-			m_position.y + m_viewportSize.y,
-			m_position.y
-		);
+		return glm::orthoLH(0.0f, m_viewportSize.x, 0.0f, m_viewportSize.y, 0.0f, 1.0f);
 	}
 };
 

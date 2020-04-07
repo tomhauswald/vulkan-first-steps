@@ -76,7 +76,8 @@ void renderCubes(Renderer& r, Mesh const& cube) {
 					);
 				}
 
-				r.renderMesh(cube, { modelMatrix });
+				r.setPushConstants(PCInstanceTransform{ modelMatrix });
+				r.renderMesh(cube);
 			}
 		}
 	}
@@ -96,19 +97,42 @@ public:
 	void run() {
 		m_renderer.initialize();
 
+		auto width = static_cast<float>(m_settings.renderer.resolution.x);
+		auto height = static_cast<float>(m_settings.renderer.resolution.y);
+
 		auto const& cube = createCubeMesh(m_renderer);
 
 		auto& texture = m_renderer.createTexture();
 		texture.updatePixelsWithImage("../assets/images/3.png");
 
-		auto sprites = std::vector(4096, Sprite(texture));
+		auto sprites = std::array<Sprite, Renderer::spriteBatchSize>{};
+		for(auto i : range(Renderer::spriteBatchSize)){
+			auto& sprite = sprites[i];
 
-		auto width = static_cast<float>(m_settings.renderer.resolution.x);
-		auto height = static_cast<float>(m_settings.renderer.resolution.y);
+			sprite.pTexture = &texture;
 
-		auto cam3d = Camera3d(width / height, 45.0f);
+			sprite.bounds.x = i * width / Renderer::spriteBatchSize;
+			sprite.bounds.y = i * height / Renderer::spriteBatchSize;
+			sprite.bounds.w = width / Renderer::spriteBatchSize;
+			sprite.bounds.h = height / Renderer::spriteBatchSize;
+		
+			sprite.textureArea.x = 0;
+			sprite.textureArea.y = 0;
+			sprite.textureArea.w = 1;
+			sprite.textureArea.h = 1;
+
+			sprite.color = {
+				rand() / (float)RAND_MAX,
+				rand() / (float)RAND_MAX,
+				rand() / (float)RAND_MAX
+			};
+			
+			sprite.drawOrder = 0.0f;
+		}
+
+		/*auto cam3d = Camera3d(width / height, 45.0f);
 		cam3d.setPosition({ 0.0f, 0.0f, -10.0f });
-		cam3d.lookAt({ 0.0f, 0.0f, 0.0f });
+		cam3d.lookAt({ 0.0f, 0.0f, 0.0f });*/
 	
 		auto cam2d = Camera2d({
 			m_settings.renderer.resolution.x,
@@ -116,22 +140,10 @@ public:
 		});
 
 		while (m_renderer.isWindowOpen()) {
-
 			if (m_renderer.tryBeginFrame()) {
-
-				m_renderer.setCameraTransform(cam2d.transform());
-				
-				for (auto& sprite : sprites) {
-					sprite.setPosition({ 
-						(width-sprite.bounds().w) * rand() / RAND_MAX,
-						(height-sprite.bounds().h) * rand() / RAND_MAX 
-					});
-					m_renderer.renderSprite(sprite);
-				}
-				
+				m_renderer.renderSpriteBatch(cam2d, sprites);
 				m_renderer.endFrame();
 			}
-
 			m_renderer.handleWindowEvents();
 		}
 	}

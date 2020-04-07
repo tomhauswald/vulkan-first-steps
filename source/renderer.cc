@@ -11,12 +11,12 @@ void Renderer::initialize() {
 	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
 	m_vulkanContext.createDepthBuffer();
 	m_vulkanContext.createPipeline(
-		"vert-textured",
+		"vert-sprite",
 		"frag-textured",
-		Vertex::binding(),
-		Vertex::attributes(),
-		sizeof(ShaderUniforms),
-		sizeof(ShaderPushConstants)
+		VPositionColorTexcoord::binding(),
+		VPositionColorTexcoord::attributes(),
+		64000,
+		128
 	);
 
 	auto w = m_settings.resolution.x;
@@ -30,14 +30,25 @@ void Renderer::initialize() {
 		{ {0, 0, 0}, {1,1,1}, {0,0} },
 	});
 
-	m_unitQuad.setVertices({
+	auto unitQuadVertices = std::vector<VPositionColorTexcoord> {
 		{ {0, 0, 0}, {1,1,1}, {0,0} },
 		{ {1, 0, 0}, {1,1,1}, {1,0} },
 		{ {1, 1, 0}, {1,1,1}, {1,1} },
 		{ {1, 1, 0}, {1,1,1}, {1,1} },
 		{ {0, 1, 0}, {1,1,1}, {0,1} },
-		{ {0, 0, 0}, {1,1,1}, {0,0} },
-		});
+		{ {0, 0, 0}, {1,1,1}, {0,0} }
+	};
+	m_unitQuad.setVertices(unitQuadVertices);
+
+	auto spriteBatchVertices = std::vector<VPositionColorTexcoord>(
+		unitQuadVertices.size() * Renderer::spriteBatchSize
+	);
+	
+	for (auto i : range(spriteBatchVertices.size())) {
+		spriteBatchVertices[i] = unitQuadVertices[i % unitQuadVertices.size()];
+	}
+
+	m_spriteBatchMesh.setVertices(std::move(spriteBatchVertices));
 
 	glfwShowWindow(m_pWindow);
 }

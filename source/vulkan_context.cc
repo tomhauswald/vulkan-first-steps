@@ -513,18 +513,7 @@ void VulkanContext::onFrameBegin() {
 		m_pipeline
 	);
 
-	// Bind the uniform buffer of the current frame.
-	vkCmdBindDescriptorSets(
-		m_swapchainCommandBuffers[m_swapchainImageIndex],
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		m_pipelineLayout,
-		0,
-		1,
-		&m_swapchainUniformDescriptorSets[m_swapchainImageIndex],
-		0,
-		nullptr
-	);
-
+	clearUniformData();
 	m_boundTextures = { nullptr };
 }
 
@@ -615,7 +604,7 @@ VkDeviceMemory VulkanContext::allocateDeviceMemory(
 VulkanBufferInfo VulkanContext::createBuffer(
 	VkBufferUsageFlags usage,
 	VkMemoryPropertyFlags memProps,
-	size_t bytes
+	VkDeviceSize bytes
 ) {
 	VulkanBufferInfo result;
 	result.usage = usage;
@@ -628,7 +617,7 @@ VulkanBufferInfo VulkanContext::createBuffer(
 	bufferInfo.pQueueFamilyIndices = &std::get<uint32_t>(m_queueInfo[QueueRole::Graphics]);
 	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	bufferInfo.size = static_cast<VkDeviceSize>(bytes);
+	bufferInfo.size = bytes;
 
 	crashIf(VK_SUCCESS != vkCreateBuffer(m_device, &bufferInfo, nullptr, &result.buffer));
 
@@ -766,9 +755,9 @@ VulkanTextureInfo VulkanContext::createTexture(uint32_t width, uint32_t height, 
 	return result;
 }
 
-VulkanBufferInfo VulkanContext::createVertexBuffer(std::vector<Vertex> const& vertices) {
+VulkanBufferInfo VulkanContext::createVertexBuffer(std::vector<VPositionColorTexcoord> const& vertices) {
 	
-	auto bytes = vertices.size() * sizeof(Vertex);
+	auto bytes = vertices.size() * sizeof(VPositionColorTexcoord);
 
 	// Create CPU-accessible buffer.
 	auto host = createHostBuffer(
@@ -800,28 +789,6 @@ VulkanBufferInfo VulkanContext::createIndexBuffer(std::vector<uint32_t> const& i
 
 	// Upload to GPU.
 	return uploadToDevice(host);
-}
-
-void VulkanContext::writeDeviceMemory(
-	VkDeviceMemory& mem,
-	void const* data,
-	size_t bytes,
-	size_t offset
-) {
-	// Map cpu-accessible buffer into RAM.
-	void* raw;
-	crashIf(VK_SUCCESS != vkMapMemory(
-		m_device,
-		mem,
-		static_cast<VkDeviceSize>(offset),
-		static_cast<VkDeviceSize>(bytes),
-		0,
-		&raw
-	));
-
-	// Fill memory-mapped buffer.
-	std::memcpy(raw, data, bytes);
-	vkUnmapMemory(m_device, mem);
 }
 
 void VulkanContext::runDeviceCommands(std::function<void(VkCommandBuffer)> commands) {
@@ -890,8 +857,8 @@ void VulkanContext::createPipeline(
 	std::string const& fragmentShaderName,
 	VkVertexInputBindingDescription const& binding,
 	std::vector<VkVertexInputAttributeDescription> const& attributes,
-	size_t uniformBufferSize,
-	size_t pushConstantSize
+	uint32_t uniformBufferSize,
+	uint32_t pushConstantSize
 ) {
 	m_vertexBinding = binding;
 	m_vertexAttributes = attributes;
@@ -1003,10 +970,10 @@ void VulkanContext::createPipeline(
 
 	auto uniformBinding = VkDescriptorSetLayoutBinding{};
 	uniformBinding.binding = 0;
-	uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	uniformBinding.descriptorCount = 1;
 	uniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
+	
 	dsLayoutCreateInfo.pBindings = &uniformBinding;
 	crashIf(VK_SUCCESS != vkCreateDescriptorSetLayout(
 		m_device,
@@ -1028,12 +995,7 @@ void VulkanContext::createPipeline(
 		nullptr,
 		&m_samplerDescriptorSetLayout
 	));
-
-	auto pushConstantRange = VkPushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	pushConstantRange.offset = 0;
-	pushConstantRange.size = m_pushConstantSize;
-
+	
 	auto descriptorSetLayouts = std::vector{ m_uniformDescriptorSetLayout };
 	for (auto const& layout : repeat(m_samplerDescriptorSetLayout, VulkanTextureInfo::numSlots)) {
 		descriptorSetLayouts.push_back(layout);
@@ -1043,8 +1005,15 @@ void VulkanContext::createPipeline(
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = std::size(descriptorSetLayouts);
 	pipelineLayoutInfo.pSetLayouts = std::data(descriptorSetLayouts);
-	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+	auto pushConstantRange = VkPushConstantRange{};
+	if (m_pushConstantSize > 0) {
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pushConstantRange.offset = 0;
+		pushConstantRange.size = m_pushConstantSize;
+		pipelineLayoutInfo.pushConstantRangeCount = 1;
+		pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+	}
 
 	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
 		m_device,
@@ -1151,8 +1120,10 @@ void VulkanContext::createPipeline(
 	));
 
 	m_swapchainUniformBuffers.resize(m_swapchainImages.size());
+	m_swapchainUniformBufferOffsets.resize(m_swapchainImages.size());
 	for (auto i : range(m_swapchainImages.size())) {
 		m_swapchainUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
+		m_swapchainUniformBufferOffsets[i] = 0;
 	}
 
 	// Create descriptor pools.
@@ -1203,7 +1174,7 @@ void VulkanContext::createPipeline(
 
 		uniformWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		uniformWrites[i].descriptorCount = 1;
-		uniformWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uniformWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 		uniformWrites[i].dstBinding = 0;
 		uniformWrites[i].dstSet = m_swapchainUniformDescriptorSets[i];
 		uniformWrites[i].pBufferInfo = &uniformInfos[i];
@@ -1256,22 +1227,26 @@ void VulkanContext::createPipeline(
 	}
 }
 
-void VulkanContext::setUniforms(ShaderUniforms const& uniforms) {
+void VulkanContext::appendUniformData(void const* data, uint32_t bytes) {
+	auto startOffset = m_swapchainUniformBufferOffsets[m_swapchainImageIndex];
+	crashIf(startOffset + bytes >= m_uniformBufferSize);
 	writeDeviceMemory(
 		m_swapchainUniformBuffers[m_swapchainImageIndex].memory,
-		&uniforms,
-		sizeof(ShaderUniforms)
+		data,
+		bytes,
+		startOffset
 	);
+	m_swapchainUniformBufferOffsets[m_swapchainImageIndex] += bytes;
 }
 
-void VulkanContext::setPushConstants(ShaderPushConstants const& push) {
+void VulkanContext::setPushConstantData(void const* data, uint32_t bytes) {
 	vkCmdPushConstants(
 		m_swapchainCommandBuffers[m_swapchainImageIndex],
 		m_pipelineLayout,
 		VK_SHADER_STAGE_VERTEX_BIT,
 		0,
-		sizeof(ShaderPushConstants),
-		&push
+		bytes,
+		data
 	);
 }
 

@@ -5,18 +5,18 @@
 
 #include "common.h"
 
-template<typename Vertex>
+template<typename VPositionColorTexcoord>
 auto defaultDescribeVertexInputBinding(uint32_t binding) {
 	return VkVertexInputBindingDescription{
 		.binding = binding,
-		.stride = sizeof(Vertex),
+		.stride = sizeof(VPositionColorTexcoord),
 		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 	};
 }
 
-template<typename Vertex>
+template<typename VPositionColorTexcoord>
 auto describeVertexInputBinding(uint32_t binding) {
-	return defaultDescribeVertexInputBinding<Vertex>(binding);
+	return defaultDescribeVertexInputBinding<VPositionColorTexcoord>(binding);
 }
 
 template<typename Attribute>
@@ -56,13 +56,13 @@ auto describeVertexInputAttributes(uint32_t binding) {
 	};
 }
 
-struct Vertex {
+struct VPositionColorTexcoord {
 	glm::vec3 position;
 	glm::vec3 color;
 	glm::vec2 texcoord;
 
 	static inline auto binding() {
-		return describeVertexInputBinding<Vertex>(0);
+		return describeVertexInputBinding<VPositionColorTexcoord>(0);
 	}
 
 	static inline auto attributes() {
@@ -74,10 +74,17 @@ struct Vertex {
 	}
 };
 
-struct ShaderUniforms {
+struct UCameraTransform {
 	glm::mat4 cameraTransform;
 };
 
-struct ShaderPushConstants {
+struct USpriteInfo {
+	alignas(16) glm::mat4 transform;
+	alignas(16) glm::vec3 color;
+	alignas(16) glm::vec2 minTexCoord;
+	alignas(16) glm::vec2 maxTexCoord;
+};
+
+struct PCInstanceTransform {
 	glm::mat4 modelMatrix;
 };

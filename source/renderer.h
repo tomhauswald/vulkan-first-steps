@@ -3,6 +3,7 @@
 #include "vulkan_context.h"
 #include "mesh.h"
 #include "sprite.h"
+#include "camera.h"
 
 #include <glm/gtx/transform.hpp>
 
@@ -21,11 +22,12 @@ private:
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
-	Mesh m_unitQuad, m_viewportQuad;
+	Mesh m_unitQuad;
+	Mesh m_viewportQuad;
+	Mesh m_spriteBatchMesh;
+
 	std::vector<std::unique_ptr<Mesh>> m_meshes;
 	std::vector<std::unique_ptr<Texture>> m_textures;
-
-	ShaderUniforms m_uniforms;
 
 	void createWindow();
 
@@ -37,7 +39,7 @@ public:
 		m_pWindow{},
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
-		m_uniforms{} {
+		m_spriteBatchMesh{ m_vulkanContext } {
 	}
 	
 	inline ~Renderer() {
@@ -73,8 +75,18 @@ public:
 		glfwPollEvents();
 	}
 
-	inline void renderMesh(Mesh const& mesh, ShaderPushConstants const& push) {
-		m_vulkanContext.setPushConstants(push);
+	template<typename Uniforms>
+	void setUniforms(Uniforms const& uniforms) {
+		m_vulkanContext.appendUniformData(&uniforms, sizeof(Uniforms));
+		m_vulkanContext.bindUniformData(sizeof(Uniforms));
+	}
+
+	template<typename PushConstants>
+	void setPushConstants(PushConstants const& pushConsts) {
+		m_vulkanContext.setPushConstantData(&pushConsts, sizeof(PushConstants));
+	}
+
+	inline void renderMesh(Mesh const& mesh) {
 		m_vulkanContext.draw(
 			mesh.vulkanVertexBuffer().buffer,
 			mesh.vulkanIndexBuffer().buffer,
@@ -82,21 +94,44 @@ public:
 		);
 	}
 
-	inline void renderSprite(Sprite const& sprite) {
+	static constexpr auto spriteBatchSize = 24;
+
+	inline void renderSpriteBatch(
+		Camera2d const& camera, 
+		std::array<Sprite, spriteBatchSize> const& sprites
+	) {
+		auto camMat = camera.transform();
+
+		struct {
+			alignas(16) USpriteInfo sprites[spriteBatchSize];
+		} batch;
 		
-		auto push = ShaderPushConstants{};
-		push.modelMatrix = glm::translate(glm::vec3{
-			sprite.bounds().x,
-			sprite.bounds().y,
-			0.0f
-		}) * glm::scale(glm::vec3{
-			sprite.bounds().w,
-			sprite.bounds().h,
-			1.0f
-		});
-		
-		bindTextureSlot(0, sprite.texture());
-		renderMesh(m_unitQuad, push);
+		for (auto i : range(spriteBatchSize)) {
+			
+			auto translate = glm::translate(glm::vec3{
+				sprites[i].bounds.x,
+				sprites[i].bounds.y,
+				0.0f
+			});
+
+			auto scale = glm::scale(glm::vec3{
+				sprites[i].bounds.w,
+				sprites[i].bounds.h,
+				1.0f
+			});
+
+			batch.sprites[i].transform = camMat * translate * scale;
+			batch.sprites[i].color = sprites[i].color;
+			batch.sprites[i].minTexCoord = { sprites[i].textureArea.x, sprites[i].textureArea.y };
+			batch.sprites[i].maxTexCoord = batch.sprites[i].minTexCoord + glm::vec2{
+				sprites[i].textureArea.w, 
+				sprites[i].textureArea.h 
+			};
+		}
+
+		setUniforms(batch);
+		bindTextureSlot(0, *sprites[0].pTexture);
+		renderMesh(m_spriteBatchMesh);
 	}
 
 	inline bool tryBeginFrame() {
@@ -110,10 +145,5 @@ public:
 
 	inline void endFrame() {
 		m_vulkanContext.onFrameEnd();
-	}
-
-	inline void setCameraTransform(glm::mat4 cameraTransform) {
-		m_uniforms.cameraTransform = std::move(cameraTransform);
-		m_vulkanContext.setUniforms(m_uniforms);
 	}
 };

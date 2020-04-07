@@ -11,7 +11,7 @@ class Mesh {
 private:
 	VulkanContext& m_vulkanContext;
 
-	std::vector<Vertex> m_vertices;
+	std::vector<VPositionColorTexcoord> m_vertices;
 	std::vector<index_type> m_indices;
 
 	VulkanBufferInfo m_vbufInfo;
@@ -49,7 +49,7 @@ public:
 	GETTER(vertices, m_vertices)
 	GETTER(indices, m_indices)
 
-	inline void setVertices(std::vector<Vertex> vertices) {
+	inline void setVertices(std::vector<VPositionColorTexcoord> vertices) {
 		destroyVertexBuffer();
 		m_vertices = std::move(vertices);
 		m_vbufInfo = m_vulkanContext.createVertexBuffer(m_vertices);

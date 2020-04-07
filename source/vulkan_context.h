@@ -86,6 +86,8 @@ private:
 	std::vector<VkDescriptorSet> m_swapchainUniformDescriptorSets;
 	std::vector<VkCommandBuffer> m_swapchainCommandBuffers;
 	std::vector<VulkanBufferInfo> m_swapchainUniformBuffers;
+	std::vector<uint32_t> m_swapchainUniformBufferOffsets;
+
 	std::vector<VkFence> m_swapchainFences;
 	uint32_t m_swapchainImageIndex; // <- Index into resource arrays.
 
@@ -111,15 +113,19 @@ private:
 		VulkanTextureInfo::numSlots
 	> m_boundTextures;
 
-	size_t m_uniformBufferSize;
-	size_t m_pushConstantSize;
+	uint32_t m_uniformBufferSize;
+	uint32_t m_pushConstantSize;
 	
 private:
 	void runDeviceCommands(std::function<void(VkCommandBuffer)> commands);
 
-	VulkanBufferInfo createBuffer(VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps, size_t bytes);
+	VulkanBufferInfo createBuffer(
+		VkBufferUsageFlags usage, 
+		VkMemoryPropertyFlags memProps, 
+		VkDeviceSize bytes
+	);
 	
-	inline VulkanBufferInfo createHostBuffer(VkBufferUsageFlags usage, size_t bytes) {
+	inline VulkanBufferInfo createHostBuffer(VkBufferUsageFlags usage, VkDeviceSize bytes) {
 		return createBuffer(
 			usage, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -127,12 +133,12 @@ private:
 		);
 	}
 
-	inline VulkanBufferInfo createDeviceBuffer(VkBufferUsageFlags usage, size_t bytes) {
+	inline VulkanBufferInfo createDeviceBuffer(VkBufferUsageFlags usage, VkDeviceSize bytes) {
 		return createBuffer(usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bytes); 
 	}
 
-	inline VulkanBufferInfo createUniformBuffer(size_t bytes) {
-		return createHostBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, bytes);
+	inline VulkanBufferInfo createUniformBuffer(uint32_t bytes) {
+		return createHostBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, static_cast<VkDeviceSize>(bytes));
 	}
 
 	VulkanBufferInfo uploadToDevice(VulkanBufferInfo hostBufferInfo);
@@ -142,7 +148,22 @@ private:
 		VkMemoryPropertyFlags memProps
 	);
 
-	void writeDeviceMemory(VkDeviceMemory& mem, void const* data, size_t bytes, size_t offset = 0);
+	inline void writeDeviceMemory(
+		VkDeviceMemory& mem,
+		void const* data,
+		VkDeviceSize bytes,
+		VkDeviceSize offset = 0
+	) {
+		void* raw;
+		crashIf(VK_SUCCESS != vkMapMemory(m_device, mem, offset, bytes, 0, &raw));
+		std::memcpy(raw, data, bytes);
+		vkUnmapMemory(m_device, mem);
+	}
+
+	inline void clearUniformData() {
+		m_swapchainUniformBufferOffsets[m_swapchainImageIndex] = 0;
+		bindUniformData(0);
+	}
 
 public:
 	~VulkanContext();
@@ -161,16 +182,31 @@ public:
 		std::string const& fragmentShaderName,
 		VkVertexInputBindingDescription const& binding,
 		std::vector<VkVertexInputAttributeDescription> const& attributes,
-		size_t uniformBufferSize, 
-		size_t pushConstantSize
+		uint32_t uniformBufferSize,
+		uint32_t pushConstantSize
 	);
 
 	VulkanTextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);
-	VulkanBufferInfo createVertexBuffer(std::vector<Vertex> const& vertices);
+	VulkanBufferInfo createVertexBuffer(std::vector<VPositionColorTexcoord> const& vertices);
 	VulkanBufferInfo createIndexBuffer(std::vector<uint32_t> const& indices);
 
-	void setUniforms(ShaderUniforms const& uniforms);
-	void setPushConstants(ShaderPushConstants const& push);
+	inline void bindUniformData(uint32_t bytes) {
+		auto offset = m_swapchainUniformBufferOffsets[m_swapchainImageIndex] - bytes;
+		vkCmdBindDescriptorSets(
+			m_swapchainCommandBuffers[m_swapchainImageIndex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_pipelineLayout,
+			0,
+			1,
+			&m_swapchainUniformDescriptorSets[m_swapchainImageIndex],
+			1,
+			&offset
+		);
+	}
+
+	void appendUniformData(void const* data, uint32_t bytes);
+	void setPushConstantData(void const* data, uint32_t bytes);
+
 	void bindTextureSlot(uint8_t slot, VulkanTextureInfo const& txr);
 
 	void onFrameBegin();
