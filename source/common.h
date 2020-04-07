@@ -122,3 +122,13 @@ size_t uniqueElemCount(Container const& container) {
 	);
 	return unique.size();
 }
+
+#define GETTER(name, member) \
+	inline decltype(member) const& name() const noexcept { \
+		return member; \
+	}
+
+#define SETTER(name, member) \
+	inline void name(decltype(member) value) noexcept { \
+		member = std::move(value); \
+	}

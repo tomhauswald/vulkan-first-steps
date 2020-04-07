@@ -30,9 +30,9 @@ public:
 		destroyTexture();
 	} 
 
-	inline std::vector<pixel_type> const& pixels() const {
-		return m_pixels;
-	}
+	GETTER(width, m_txrInfo.width)
+	GETTER(height, m_txrInfo.height)
+	GETTER(pixels, m_pixels)
 
 	inline void updatePixelsWithImage(std::string const& path) {
 		updatePixelsWithImage(png::image<png::rgba_pixel>(path.c_str()));
@@ -69,7 +69,5 @@ public:
 	// this operation shall exclusively be used for read and draw
 	// commands. To express this, we opt for the const.
 
-	inline VulkanTextureInfo const& vulkanTexture() const {
-		return m_txrInfo;
-	}
+	GETTER(vulkanTexture, m_txrInfo)
 };

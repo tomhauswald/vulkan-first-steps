@@ -2,30 +2,69 @@
 
 #include <glm/gtx/transform.hpp>
 
-class Camera {
+class Camera2d {
+private:
+	glm::vec2 m_position;
+	glm::vec2 m_viewportSize;
+	float m_zoom;
+
+public:
+	inline Camera2d(glm::vec2 viewportSize) :
+		m_position{ 0,0 },
+		m_viewportSize{ std::move(viewportSize) },
+		m_zoom{ 1 }{
+	}
+
+	inline glm::mat4 transform() const {
+		return glm::ortho(
+			m_position.x,
+			m_position.x + m_viewportSize.x,
+			m_position.y + m_viewportSize.y,
+			m_position.y
+		);
+	}
+};
+
+class Camera3d {
 private:
 	glm::vec3 m_position;
 	glm::vec3 m_direction;
 	float m_aspectRatio;
 	float m_fovDegrees;
-
-	glm::mat4 m_viewMatrix;
-	glm::mat4 m_projMatrix;
+	glm::mat4 m_projection;
 
 public:
-	Camera(float aspectRatio = 16.0f / 9.0f, float fovDegrees = 45.0f);
+	inline Camera3d(float aspectRatio, float fovDegrees) :
+		m_position{ 0, 0, 0 },
+		m_direction{ 0, 0, 1 },
+		m_aspectRatio{ aspectRatio },
+		m_fovDegrees{ fovDegrees }{
 
-	glm::vec3 const& position() const;
-	void setPosition(glm::vec3 const& pos);
+		m_projection = glm::perspectiveLH(
+			glm::radians(m_fovDegrees),
+			m_aspectRatio,
+			1e-3f,
+			1e3f
+		);
+	}
 
-	glm::vec3 const& direction() const;
-	void setDirection(glm::vec3 const& dir);
+	GETTER(fovDegrees, m_fovDegrees)
+	GETTER(position, m_position)
+	GETTER(direction, m_direction)
+	GETTER(aspectRatio, m_aspectRatio)
 
-	void lookAt(glm::vec3 const& target);
+	SETTER(setPosition, m_position)
+	SETTER(setDirection, m_direction)
 
-	float aspectRatio() const;
-	float fovDegrees() const;
-	
-	glm::mat4 const& viewMatrix() const;
-	glm::mat4 const& projMatrix() const;
+	inline void lookAt(glm::vec3 const& target) noexcept {
+		m_direction = glm::normalize(target - m_position);
+	}
+
+	inline glm::mat4 transform() const noexcept {
+		return m_projection * glm::lookAtLH(
+			m_position,
+			m_position + m_direction,
+			{ 0,1,0 }
+		);
+	}
 };

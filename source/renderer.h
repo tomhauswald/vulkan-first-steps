@@ -2,7 +2,9 @@
 
 #include "vulkan_context.h"
 #include "mesh.h"
-#include "texture.h"
+#include "sprite.h"
+
+#include <glm/gtx/transform.hpp>
 
 struct RendererSettings {
 	
@@ -18,23 +20,33 @@ private:
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
 
+	Mesh m_fsqMesh;
 	std::vector<std::unique_ptr<Mesh>> m_meshes;
 	std::vector<std::unique_ptr<Texture>> m_textures;
+
+	ShaderUniforms m_uniforms;
 
 	void createWindow();
 
 public:
-	Renderer(RendererSettings const& settings);
-	~Renderer();
+	inline Renderer(RendererSettings const& settings) :
+		m_settings{ settings },
+		m_vulkanContext{},
+		m_pWindow{},
+		m_fsqMesh{ m_vulkanContext },
+		m_uniforms{} {
+	}
+	
+	inline ~Renderer() {
+		m_vulkanContext.flush();
+		if (m_pWindow) {
+			glfwDestroyWindow(m_pWindow);
+			m_pWindow = nullptr;
+		}
+		glfwTerminate();
+	}
 	
 	void initialize();
-	bool isWindowOpen() const;
-	void handleWindowEvents();
-
-	void renderMesh(Mesh const& mesh, ShaderPushConstants const& push);
-
-	bool tryBeginFrame();
-	void endFrame();
 
 	inline Mesh& createMesh() {
 		m_meshes.push_back(std::make_unique<Mesh>(m_vulkanContext));
@@ -50,5 +62,47 @@ public:
 		m_vulkanContext.bindTexture(txr.vulkanTexture(), slot);
 	}
 
-	void setUniformData(ShaderUniforms const& data);
+	inline bool isWindowOpen() const {
+		return m_pWindow && !glfwWindowShouldClose(m_pWindow);
+	}
+
+	inline void handleWindowEvents() {
+		glfwPollEvents();
+	}
+
+	inline void renderMesh(Mesh const& mesh, ShaderPushConstants const& push) {
+		m_vulkanContext.setPushConstants(push);
+		m_vulkanContext.draw(
+			mesh.vulkanVertexBuffer().buffer,
+			mesh.vulkanIndexBuffer().buffer,
+			static_cast<uint32_t>(mesh.vertices().size())
+		);
+	}
+
+	inline void renderSprite(Sprite const& sprite) {
+		auto push = ShaderPushConstants{};
+		push.modelMatrix = glm::translate(glm::vec3{
+			sprite.bounds().x,
+			sprite.bounds().y,
+			0.0f
+		});
+		bindTexture(*sprite.texture());
+		renderMesh(m_fsqMesh, push);
+	}
+
+	inline bool tryBeginFrame() {
+		if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
+			m_vulkanContext.flush();
+			return false;
+		}
+		m_vulkanContext.setUniforms(m_uniforms);
+		m_vulkanContext.onFrameBegin();
+		return true;
+	}
+
+	inline void endFrame() {
+		m_vulkanContext.onFrameEnd();
+	}
+
+	SETTER(setCameraTransform, m_uniforms.cameraTransform)
 };

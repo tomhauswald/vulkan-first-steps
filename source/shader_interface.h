@@ -75,8 +75,7 @@ struct Vertex {
 };
 
 struct ShaderUniforms {
-	glm::mat4 viewMatrix;
-	glm::mat4 projectionMatrix;
+	glm::mat4 cameraTransform;
 };
 
 struct ShaderPushConstants {

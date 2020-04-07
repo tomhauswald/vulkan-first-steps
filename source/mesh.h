@@ -46,13 +46,8 @@ public:
 		destroyIndexBuffer();
 	}
 
-	inline std::vector<Vertex> const& vertices() const {
-		return m_vertices;
-	}
-
-	inline std::vector<index_type> const& indices() const {
-		return m_indices;
-	}
+	GETTER(vertices, m_vertices)
+	GETTER(indices, m_indices)
 
 	inline void setVertices(std::vector<Vertex> vertices) {
 		destroyVertexBuffer();
@@ -71,11 +66,6 @@ public:
 	// this operation shall exclusively be used for read and draw
 	// commands. To express this, we opt for the const.
 
-	inline VulkanBufferInfo const& vulkanVertexBuffer() const {
-		return m_vbufInfo;
-	}
-
-	inline VulkanBufferInfo const& vulkanIndexBuffer() const {
-		return m_ibufInfo;
-	}
+	GETTER(vulkanVertexBuffer, m_vbufInfo)
+	GETTER(vulkanIndexBuffer, m_ibufInfo)
 };

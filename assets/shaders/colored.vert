@@ -7,8 +7,7 @@ layout(location = 1) in vec3 vertexColor;
 layout(location = 0) out vec3 fragmentColor;
 
 layout(binding = 0) uniform UniformData {
-	mat4 viewMatrix;
-	mat4 projectionMatrix;
+	mat4 cameraTransform;
 } globals;
 
 layout(push_constant) uniform PushConstantData {
@@ -17,8 +16,7 @@ layout(push_constant) uniform PushConstantData {
 
 void main() {
 
-	gl_Position = globals.projectionMatrix 
-		    * globals.viewMatrix 
+	gl_Position = globals.cameraTransform 
 		    * self.modelMatrix 
                     * vec4(vertexPosition, 1.0);
 	

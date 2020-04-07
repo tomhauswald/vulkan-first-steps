@@ -3,11 +3,14 @@
 
 #include <fstream>
 
-constexpr std::array requiredDeviceExtensions{
+constexpr auto validateReleaseBuild = true;
+constexpr auto validate = debug || validateReleaseBuild;
+
+constexpr auto requiredDeviceExtensions = std::array{
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
-constexpr std::array validationLayers{
+constexpr auto validationLayers = std::array{
 	"VK_LAYER_LUNARG_standard_validation",
 	"VK_LAYER_LUNARG_monitor"
 };
@@ -23,8 +26,8 @@ void VulkanContext::createInstance() {
 	createInfo.pApplicationInfo = &appInfo;
 
 	// Specify validation layers to enable in debug mode.
-	createInfo.enabledLayerCount = debug ? validationLayers.size() : 0;
-	createInfo.ppEnabledLayerNames = debug ? validationLayers.data() : nullptr;
+	createInfo.enabledLayerCount = validate ? validationLayers.size() : 0;
+	createInfo.ppEnabledLayerNames = validate ? validationLayers.data() : nullptr;
 
 	// Add the extensions required by GLFW.
 	uint32_t extensionCount;
@@ -1014,7 +1017,7 @@ void VulkanContext::createPipeline(
 	auto rasterState = VkPipelineRasterizationStateCreateInfo{};
 	rasterState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterState.lineWidth = 1.0f;
-	rasterState.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterState.cullMode = debug ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 	rasterState.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterState.polygonMode = VK_POLYGON_MODE_FILL;
 
@@ -1141,29 +1144,21 @@ void VulkanContext::createPipeline(
 	m_swapchainDescriptorSets.resize(m_swapchainImages.size());
 	crashIf(VK_SUCCESS != vkAllocateDescriptorSets(m_device, &descSetInfo, m_swapchainDescriptorSets.data()));
 
-	auto uniformWrites = mapToVector<
-		decltype(range(0)),
-		VkWriteDescriptorSet
-	>(
-		range(m_swapchainImages.size()),
-		[&](auto imageIndex) {
+	auto uniformInfos = std::vector<VkDescriptorBufferInfo>(m_swapchainImages.size());
+	auto uniformWrites = std::vector<VkWriteDescriptorSet>(m_swapchainImages.size());
+	for (auto i : range(m_swapchainImages.size())) {
+		
+		uniformInfos[i].buffer = m_swapchainUniformBuffers[i].buffer;
+		uniformInfos[i].offset = 0;
+		uniformInfos[i].range = m_uniformBufferSize;
 
-			auto uniformBufferInfo = VkDescriptorBufferInfo{};
-			uniformBufferInfo.buffer = m_swapchainUniformBuffers[imageIndex].buffer;
-			uniformBufferInfo.offset = 0;
-			uniformBufferInfo.range = m_uniformBufferSize;
-
-			auto uniformWrite = VkWriteDescriptorSet{};
-			uniformWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			uniformWrite.descriptorCount = 1;
-			uniformWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			uniformWrite.dstBinding = 0;
-			uniformWrite.dstSet = m_swapchainDescriptorSets[imageIndex];
-			uniformWrite.pBufferInfo = &uniformBufferInfo;
-
-			return uniformWrite;
-		}
-	);
+		uniformWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		uniformWrites[i].descriptorCount = 1;
+		uniformWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uniformWrites[i].dstBinding = 0;
+		uniformWrites[i].dstSet = m_swapchainDescriptorSets[i];
+		uniformWrites[i].pBufferInfo = &uniformInfos[i];
+	}
 	vkUpdateDescriptorSets(m_device, uniformWrites.size(), uniformWrites.data(), 0, nullptr);
 
 	// Create sampler.

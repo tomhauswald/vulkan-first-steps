@@ -1,6 +1,4 @@
 #include "renderer.h"
-#include <glm/gtx/transform.hpp>
-#include <chrono>
 
 void Renderer::initialize() {	
 
@@ -20,6 +18,17 @@ void Renderer::initialize() {
 		sizeof(ShaderUniforms),
 		sizeof(ShaderPushConstants)
 	);
+
+	auto w = m_settings.resolution.x;
+	auto h = m_settings.resolution.y;
+	m_fsqMesh.setVertices({
+		{ {0, 0, 0}, {1,1,1}, {0,0} },
+		{ {w, 0, 0}, {1,1,1}, {1,0} },
+		{ {w, h, 0}, {1,1,1}, {1,1} },
+		{ {w, h, 0}, {1,1,1}, {1,1} },
+		{ {0, h, 0}, {1,1,1}, {0,1} },
+		{ {0, 0, 0}, {1,1,1}, {0,0} },
+	});
 
 	glfwShowWindow(m_pWindow);
 }
@@ -45,57 +54,4 @@ void Renderer::createWindow() {
 
 	// Window creation must succeed.
 	crashIf(!m_pWindow);
-}
-
-bool Renderer::isWindowOpen() const {
-	return m_pWindow && !glfwWindowShouldClose(m_pWindow);
-}
-
-void Renderer::handleWindowEvents() {
-	glfwPollEvents();
-}
-
-void Renderer::renderMesh(Mesh const& mesh, ShaderPushConstants const& push) {
-	
-	m_vulkanContext.setPushConstants(push);
-	m_vulkanContext.draw(
-		mesh.vulkanVertexBuffer().buffer, 
-		mesh.vulkanIndexBuffer().buffer,
-		static_cast<uint32_t>(mesh.vertices().size())
-	);
-}
-
-bool Renderer::tryBeginFrame() {
-
-	if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
-		m_vulkanContext.flush();
-		return false;
-	}
-
-	m_vulkanContext.onFrameBegin();
-	return true;
-}
-
-void Renderer::endFrame() {
-	m_vulkanContext.onFrameEnd();
-}
-
-void Renderer::setUniformData(ShaderUniforms const& data) {
-	m_vulkanContext.setUniforms(data);
-}
-
-Renderer::Renderer(RendererSettings const& settings)
-	: m_settings{ settings }, m_pWindow{} {
-}
-
-Renderer::~Renderer() {
-
-	m_vulkanContext.flush();
-	
-	if (m_pWindow) {
-		glfwDestroyWindow(m_pWindow);
-		m_pWindow = nullptr;
-	}
-
-	glfwTerminate();
 }

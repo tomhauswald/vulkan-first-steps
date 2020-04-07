@@ -97,28 +97,37 @@ public:
 		m_renderer.initialize();
 
 		auto const& cube = createCubeMesh(m_renderer);
-
+		
 		auto& texture = m_renderer.createTexture();
-		texture.updatePixelsWithImage("../assets/images/logo_transparent.png");
+		texture.updatePixelsWithImage("../assets/images/coffee.png");
+		auto sprite = Sprite(texture);
 
-		auto camera = Camera(
+#ifdef D3
+		auto camera = Camera3d(
 			m_settings.renderer.resolution.x / (float)m_settings.renderer.resolution.y,
 			45.0f
 		);
 		camera.setPosition({ 0.0f, 0.0f, -10.0f });
 		camera.lookAt({ 0.0f, 0.0f, 0.0f });
+#else
+		auto camera = Camera2d({
+			m_settings.renderer.resolution.x,
+			m_settings.renderer.resolution.y
+		});
+#endif
 
 		while (m_renderer.isWindowOpen()) {
 
 			if (m_renderer.tryBeginFrame()) {
 
-				auto uniformData = ShaderUniforms{};
-				uniformData.viewMatrix = camera.viewMatrix();
-				uniformData.projectionMatrix = camera.projMatrix();
-				
-				m_renderer.setUniformData(uniformData);
+				m_renderer.setCameraTransform(camera.transform());
+
+#ifdef D3
 				m_renderer.bindTexture(texture);
 				renderCubes(m_renderer, cube);
+#else
+				m_renderer.renderSprite(sprite);
+#endif
 
 				m_renderer.endFrame();
 			}
