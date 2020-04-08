@@ -856,14 +856,12 @@ void VulkanContext::createPipeline(
 	std::string const& vertexShaderName,
 	std::string const& fragmentShaderName,
 	VkVertexInputBindingDescription const& binding,
-	std::vector<VkVertexInputAttributeDescription> const& attributes,
-	uint32_t uniformBufferSize,
-	uint32_t pushConstantSize
+	std::vector<VkVertexInputAttributeDescription> const& attributes
 ) {
+	constexpr auto enableDepthTest = false;
+
 	m_vertexBinding = binding;
 	m_vertexAttributes = attributes;
-	m_uniformBufferSize = uniformBufferSize;
-	m_pushConstantSize = pushConstantSize;
 
 	auto colorAttachment = VkAttachmentDescription{};
 	colorAttachment.format = VK_FORMAT_B8G8R8A8_SRGB;
@@ -895,7 +893,7 @@ void VulkanContext::createPipeline(
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentReference;
-	subpass.pDepthStencilAttachment = &depthAttachmentReference;
+	subpass.pDepthStencilAttachment = enableDepthTest ? &depthAttachmentReference : nullptr;
 
 	auto dependency = VkSubpassDependency{};
 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -905,11 +903,13 @@ void VulkanContext::createPipeline(
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-	auto attachments = { colorAttachment, depthAttachment };
+	auto attachments = std::vector{ colorAttachment };
+	if(enableDepthTest) attachments.push_back(depthAttachment);
+
 	auto renderPassInfo = VkRenderPassCreateInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = 2;
-	renderPassInfo.pAttachments = std::data(attachments);
+	renderPassInfo.attachmentCount = attachments.size();
+	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
 	renderPassInfo.dependencyCount = 1;
@@ -928,14 +928,17 @@ void VulkanContext::createPipeline(
 	>(
 		m_swapchainImageViews,
 		[&](auto const& view) {
-			auto attachments = { view, std::get<VkImageView>(m_depthBuffer) };
+
+			auto attachments = std::vector{ view };
+			if (enableDepthTest) attachments.push_back(std::get<VkImageView>(m_depthBuffer));
+
 			auto framebufferInfo = VkFramebufferCreateInfo{};
 			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 			framebufferInfo.width = m_windowExtent.width;
 			framebufferInfo.height = m_windowExtent.height;
 			framebufferInfo.layers = 1;
-			framebufferInfo.attachmentCount = 2;
-			framebufferInfo.pAttachments = std::data(attachments);
+			framebufferInfo.attachmentCount = attachments.size();
+			framebufferInfo.pAttachments = attachments.data();
 			framebufferInfo.renderPass = m_renderPass;
 
 			VkFramebuffer framebuffer;
@@ -1007,13 +1010,11 @@ void VulkanContext::createPipeline(
 	pipelineLayoutInfo.pSetLayouts = std::data(descriptorSetLayouts);
 
 	auto pushConstantRange = VkPushConstantRange{};
-	if (m_pushConstantSize > 0) {
-		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		pushConstantRange.offset = 0;
-		pushConstantRange.size = m_pushConstantSize;
-		pipelineLayoutInfo.pushConstantRangeCount = 1;
-		pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-	}
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = maxPushConstantBytes;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	crashIf(VK_SUCCESS != vkCreatePipelineLayout(
 		m_device,
@@ -1065,8 +1066,8 @@ void VulkanContext::createPipeline(
 	blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 	blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
-	blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 
 	auto blendState = VkPipelineColorBlendStateCreateInfo{};
 	blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1108,7 +1109,7 @@ void VulkanContext::createPipeline(
 	pipelineInfo.pRasterizationState = &rasterState;
 	pipelineInfo.pColorBlendState = &blendState;
 	pipelineInfo.pMultisampleState = &msaaState;
-	pipelineInfo.pDepthStencilState = &depthStencilState;
+	pipelineInfo.pDepthStencilState = enableDepthTest ? &depthStencilState : nullptr;
 
 	crashIf(VK_SUCCESS != vkCreateGraphicsPipelines(
 		m_device,
@@ -1122,7 +1123,7 @@ void VulkanContext::createPipeline(
 	m_swapchainUniformBuffers.resize(m_swapchainImages.size());
 	m_swapchainUniformBufferOffsets.resize(m_swapchainImages.size());
 	for (auto i : range(m_swapchainImages.size())) {
-		m_swapchainUniformBuffers[i] = createUniformBuffer(uniformBufferSize);
+		m_swapchainUniformBuffers[i] = createUniformBuffer(maxUniformBufferBytes);
 		m_swapchainUniformBufferOffsets[i] = 0;
 	}
 
@@ -1170,7 +1171,7 @@ void VulkanContext::createPipeline(
 		
 		uniformInfos[i].buffer = m_swapchainUniformBuffers[i].buffer;
 		uniformInfos[i].offset = 0;
-		uniformInfos[i].range = m_uniformBufferSize;
+		uniformInfos[i].range = maxUniformBufferBytes;
 
 		uniformWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		uniformWrites[i].descriptorCount = 1;
@@ -1229,7 +1230,7 @@ void VulkanContext::createPipeline(
 
 void VulkanContext::appendUniformData(void const* data, uint32_t bytes) {
 	auto startOffset = m_swapchainUniformBufferOffsets[m_swapchainImageIndex];
-	crashIf(startOffset + bytes >= m_uniformBufferSize);
+	crashIf(startOffset + bytes >= maxUniformBufferBytes);
 	writeDeviceMemory(
 		m_swapchainUniformBuffers[m_swapchainImageIndex].memory,
 		data,

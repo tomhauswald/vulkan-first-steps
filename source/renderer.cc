@@ -14,9 +14,7 @@ void Renderer::initialize() {
 		"vert-sprite",
 		"frag-textured",
 		VPositionColorTexcoord::binding(),
-		VPositionColorTexcoord::attributes(),
-		64000,
-		128
+		VPositionColorTexcoord::attributes()
 	);
 
 	auto w = m_settings.resolution.x;
@@ -51,6 +49,43 @@ void Renderer::initialize() {
 	m_spriteBatchMesh.setVertices(std::move(spriteBatchVertices));
 
 	glfwShowWindow(m_pWindow);
+}
+
+
+void Renderer::renderSpriteBatch(
+	Camera2d const& camera,
+	std::array<Sprite, USpriteBatch::size> const& sprites
+) {
+	auto batch = USpriteBatch{};
+
+	static const auto hw = m_settings.resolution.x / 2.0f;
+	static const auto hh = m_settings.resolution.y / 2.0f;
+
+	for (auto i : range(USpriteBatch::size)) {
+
+		batch.sprites[i].bounds = {
+			sprites[i].bounds.x / hw - 1,
+			1 - sprites[i].bounds.y / hh,
+			sprites[i].bounds.w / hw,
+			-sprites[i].bounds.h / hh
+		};
+
+		batch.sprites[i].textureArea = {
+			sprites[i].textureArea.x,
+			sprites[i].textureArea.y,
+			sprites[i].textureArea.w,
+			sprites[i].textureArea.h
+		};
+
+		batch.sprites[i].color = { 
+			sprites[i].color, 
+			sprites[i].drawOrder 
+		};
+	}
+
+	setUniforms(batch);
+	bindTextureSlot(0, *sprites[0].pTexture);
+	renderMesh(m_spriteBatchMesh);
 }
 
 void Renderer::createWindow() {

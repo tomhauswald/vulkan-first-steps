@@ -15,8 +15,17 @@ public:
 		m_zoom{ 1 }{
 	}
 
-	inline glm::mat4 transform() const {
-		return glm::ortho(0.0f, m_viewportSize.x, m_viewportSize.y, 0.0f);
+	inline bool pointVisible(glm::vec2 const& point) const noexcept {
+		return (
+			(point.x > m_position.x) &&
+			(point.y > m_position.y) &&
+			(point.x < m_position.x + m_viewportSize.x) &&
+			(point.y < m_position.y + m_viewportSize.y)
+		);
+	}
+
+	inline glm::vec2 transformPoint(glm::vec2 const& point) const noexcept {
+		return { point.x - m_position.x, point.y - m_position.y };
 	}
 };
 

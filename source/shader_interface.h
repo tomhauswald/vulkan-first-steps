@@ -72,19 +72,25 @@ struct VPositionColorTexcoord {
 			glm::vec2
 		>(0); 
 	}
+
 };
 
 struct UCameraTransform {
 	glm::mat4 cameraTransform;
 };
 
-struct USpriteBatch {
-	static constexpr auto size = 24;
-	glm::mat4 transforms[size];
-	glm::vec4 textureAreas[size];
-	glm::vec4 colors[size];
-
+struct USprite {
+	glm::vec4 bounds;
+	glm::vec4 textureArea;
+	glm::vec4 color;
 };
+
+struct USpriteBatch {
+	static constexpr auto size = 1024;
+	USprite sprites[size];
+};
+
 struct PCInstanceTransform {
 	glm::mat4 modelMatrix;
+	static constexpr auto a = sizeof(USpriteBatch);
 };

@@ -8,23 +8,32 @@ layout(location = 2) in vec2 vertexUV;
 layout(location = 0) out vec3 fragmentColor;
 layout(location = 1) out vec2 fragmentUV;
 
-#define BATCH_SIZE 24
+#define BATCH_SIZE 1024
 #define VERTS_PER_SPRITE 6
 
-layout(set = 0, binding = 0) uniform sprite_batch_ {
-	mat4 transforms[BATCH_SIZE];
-	vec4 textureAreas[BATCH_SIZE];
-	vec4 colors[BATCH_SIZE];
+struct sprite_t {
+	vec4 bounds;
+	vec4 textureArea;
+	vec4 color;
+};
+
+layout(set = 0, binding = 0) uniform sprite_batch_t {
+	sprite_t sprites[BATCH_SIZE];
 } batch;
 
 void main() {
 
 	int index = gl_VertexIndex / VERTS_PER_SPRITE;
-	gl_Position = batch.transforms[index] * vec4(vertexPosition, 1.0);
 	
-	fragmentColor = vertexColor * vec3(batch.colors[index]);
-	fragmentUV = batch.textureAreas[index].xy + vertexUV * (
-		  batch.textureAreas[index].zw
-		- batch.textureAreas[index].xy
+	gl_Position = vec4(
+		batch.sprites[index].bounds.xy 
+		+ vertexPosition.xy * batch.sprites[index].bounds.zw,
+		0.0, 
+		1.0
 	);
+
+	fragmentColor = vertexColor * vec3(batch.sprites[index].color);
+	
+	fragmentUV = batch.sprites[index].textureArea.xy 
+	           + vertexUV * batch.sprites[index].textureArea.zw;
 }

@@ -113,8 +113,8 @@ private:
 		VulkanTextureInfo::numSlots
 	> m_boundTextures;
 
-	uint32_t m_uniformBufferSize;
-	uint32_t m_pushConstantSize;
+	static constexpr uint16_t maxUniformBufferBytes = 65535;
+	static constexpr uint8_t maxPushConstantBytes = 128;
 	
 private:
 	void runDeviceCommands(std::function<void(VkCommandBuffer)> commands);
@@ -137,7 +137,8 @@ private:
 		return createBuffer(usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bytes); 
 	}
 
-	inline VulkanBufferInfo createUniformBuffer(uint32_t bytes) {
+	inline VulkanBufferInfo createUniformBuffer(uint16_t bytes) {
+		crashIf(bytes > maxUniformBufferBytes);
 		return createHostBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, static_cast<VkDeviceSize>(bytes));
 	}
 
@@ -181,9 +182,7 @@ public:
 		std::string const& vertexShaderName,
 		std::string const& fragmentShaderName,
 		VkVertexInputBindingDescription const& binding,
-		std::vector<VkVertexInputAttributeDescription> const& attributes,
-		uint32_t uniformBufferSize,
-		uint32_t pushConstantSize
+		std::vector<VkVertexInputAttributeDescription> const& attributes
 	);
 
 	VulkanTextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);

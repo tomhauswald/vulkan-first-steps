@@ -105,29 +105,26 @@ public:
 		auto& texture = m_renderer.createTexture();
 		texture.updatePixelsWithImage("../assets/images/3.png");
 
+		srand(time(nullptr));
+		auto const frand = [](float min, float max) {
+			return min + (max - min) * rand() / (float)RAND_MAX;
+		};
+
 		auto sprites = std::array<Sprite, USpriteBatch::size>{};
 		for(auto i : range(USpriteBatch::size)){
 			auto& sprite = sprites[i];
 
 			sprite.pTexture = &texture;
-
-			sprite.bounds.x = i * width / USpriteBatch::size;
-			sprite.bounds.y = i * height / USpriteBatch::size;
-			sprite.bounds.w = width / USpriteBatch::size;
-			sprite.bounds.h = height / USpriteBatch::size;
-		
-			sprite.textureArea.x = 0;
-			sprite.textureArea.y = 0;
-			sprite.textureArea.w = 1;
-			sprite.textureArea.h = 1;
-
-			sprite.color = {
-				rand() / (float)RAND_MAX,
-				rand() / (float)RAND_MAX,
-				rand() / (float)RAND_MAX
-			};
 			
-			sprite.drawOrder = 0.0f;
+			sprite.bounds.w = frand(64, 256);
+			sprite.bounds.h = frand(64, 256);
+			sprite.bounds.x = frand(-sprite.bounds.w, width);
+			sprite.bounds.y = frand(-sprite.bounds.h, height);
+
+			sprite.textureArea = { 0,0,1,1 };
+
+			sprite.color = { frand(0,1), frand(0,1), frand(0,1) };
+			sprite.drawOrder = frand(0,1);
 		}
 
 		/*auto cam3d = Camera3d(width / height, 45.0f);

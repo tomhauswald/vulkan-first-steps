@@ -94,41 +94,10 @@ public:
 		);
 	}
 
-	inline void renderSpriteBatch(
-		Camera2d const& camera, 
+	void renderSpriteBatch(
+		Camera2d const& camera,
 		std::array<Sprite, USpriteBatch::size> const& sprites
-	) {
-		auto camMat = camera.transform();
-		auto batch = USpriteBatch{};
-		
-		for (auto i : range(USpriteBatch::size)) {
-
-			auto translate = glm::translate(glm::vec3{
-				sprites[i].bounds.x,
-				sprites[i].bounds.y,
-				0.0f
-			});
-
-			auto scale = glm::scale(glm::vec3{
-				sprites[i].bounds.w,
-				sprites[i].bounds.h,
-				1.0f
-			});
-
-			batch.transforms[i] = camMat * translate * scale;
-			batch.colors[i] = { sprites[i].color, 1.0f };
-			batch.textureAreas[i] = {
-				sprites[i].textureArea.x,
-				sprites[i].textureArea.y, 
-				sprites[i].textureArea.w,
-				sprites[i].textureArea.h
-			};
-		}
-
-		setUniforms(batch);
-		bindTextureSlot(0, *sprites[0].pTexture);
-		renderMesh(m_spriteBatchMesh);
-	}
+	);
 
 	inline bool tryBeginFrame() {
 		if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
