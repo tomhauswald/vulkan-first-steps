@@ -94,10 +94,7 @@ public:
 		);
 	}
 
-	void renderSpriteBatch(
-		Camera2d const& camera,
-		std::array<Sprite, USpriteBatch::size> const& sprites
-	);
+	void renderSpriteBatch(Camera2d const& camera, std::vector<Sprite> const& sprites);
 
 	inline bool tryBeginFrame() {
 		if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {

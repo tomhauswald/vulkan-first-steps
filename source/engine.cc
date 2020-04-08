@@ -94,13 +94,32 @@ public:
 		m_renderer{ settings.renderer } {
 	}
 
-	void run() {
+	/*void run3dTest() {
 		m_renderer.initialize();
 
 		auto width = static_cast<float>(m_settings.renderer.resolution.x);
 		auto height = static_cast<float>(m_settings.renderer.resolution.y);
 
 		auto const& cube = createCubeMesh(m_renderer);
+
+		auto cam3d = Camera3d(width / height, 45.0f);
+		cam3d.setPosition({ 0.0f, 0.0f, -10.0f });
+		cam3d.lookAt({ 0.0f, 0.0f, 0.0f });
+
+		while (m_renderer.isWindowOpen()) {
+			if (m_renderer.tryBeginFrame()) {
+				renderCubes(m_renderer, cube);
+				m_renderer.endFrame();
+			}
+			m_renderer.handleWindowEvents();
+		}
+	}*/
+
+	void run2dTest() {
+		m_renderer.initialize();
+
+		auto width = static_cast<float>(m_settings.renderer.resolution.x);
+		auto height = static_cast<float>(m_settings.renderer.resolution.y);
 
 		auto& texture = m_renderer.createTexture();
 		texture.updatePixelsWithImage("../assets/images/3.png");
@@ -110,7 +129,7 @@ public:
 			return min + (max - min) * rand() / (float)RAND_MAX;
 		};
 
-		auto sprites = std::array<Sprite, USpriteBatch::size>{};
+		auto sprites = std::vector<Sprite>(USpriteBatch::size);
 		for(auto i : range(USpriteBatch::size)){
 			auto& sprite = sprites[i];
 
@@ -126,10 +145,6 @@ public:
 			sprite.color = { frand(0,1), frand(0,1), frand(0,1) };
 			sprite.drawOrder = frand(0,1);
 		}
-
-		/*auto cam3d = Camera3d(width / height, 45.0f);
-		cam3d.setPosition({ 0.0f, 0.0f, -10.0f });
-		cam3d.lookAt({ 0.0f, 0.0f, 0.0f });*/
 	
 		auto cam2d = Camera2d({
 			m_settings.renderer.resolution.x,
@@ -153,7 +168,7 @@ int main() {
 			.resolution = {1440, 900},
 			.vsyncEnabled = false
 		}
-	}).run();
+	}).run2dTest();
 
 	std::cout << "Press [ENTER] exit application..." << lf;
 	(void) getchar();

@@ -52,38 +52,36 @@ void Renderer::initialize() {
 }
 
 
-void Renderer::renderSpriteBatch(
-	Camera2d const& camera,
-	std::array<Sprite, USpriteBatch::size> const& sprites
-) {
-	auto batch = USpriteBatch{};
+void Renderer::renderSpriteBatch(Camera2d const& camera, std::vector<Sprite> const& sprites) {
+
+	auto batch = std::make_unique<USpriteBatch>();
 
 	static const auto hw = m_settings.resolution.x / 2.0f;
 	static const auto hh = m_settings.resolution.y / 2.0f;
 
 	for (auto i : range(USpriteBatch::size)) {
 
-		batch.sprites[i].bounds = {
+		batch->sprites[i].bounds = {
 			sprites[i].bounds.x / hw - 1,
 			1 - sprites[i].bounds.y / hh,
 			sprites[i].bounds.w / hw,
 			-sprites[i].bounds.h / hh
 		};
 
-		batch.sprites[i].textureArea = {
+		batch->sprites[i].textureArea = {
 			sprites[i].textureArea.x,
 			sprites[i].textureArea.y,
 			sprites[i].textureArea.w,
 			sprites[i].textureArea.h
 		};
 
-		batch.sprites[i].color = { 
+		batch->sprites[i].color = {
 			sprites[i].color, 
 			sprites[i].drawOrder 
 		};
 	}
 
-	setUniforms(batch);
+	setUniforms(*batch);
 	bindTextureSlot(0, *sprites[0].pTexture);
 	renderMesh(m_spriteBatchMesh);
 }
