@@ -94,20 +94,15 @@ public:
 		);
 	}
 
-	static constexpr auto spriteBatchSize = 24;
-
 	inline void renderSpriteBatch(
 		Camera2d const& camera, 
-		std::array<Sprite, spriteBatchSize> const& sprites
+		std::array<Sprite, USpriteBatch::size> const& sprites
 	) {
 		auto camMat = camera.transform();
-
-		struct {
-			alignas(16) USpriteInfo sprites[spriteBatchSize];
-		} batch;
+		auto batch = USpriteBatch{};
 		
-		for (auto i : range(spriteBatchSize)) {
-			
+		for (auto i : range(USpriteBatch::size)) {
+
 			auto translate = glm::translate(glm::vec3{
 				sprites[i].bounds.x,
 				sprites[i].bounds.y,
@@ -120,12 +115,13 @@ public:
 				1.0f
 			});
 
-			batch.sprites[i].transform = camMat * translate * scale;
-			batch.sprites[i].color = sprites[i].color;
-			batch.sprites[i].minTexCoord = { sprites[i].textureArea.x, sprites[i].textureArea.y };
-			batch.sprites[i].maxTexCoord = batch.sprites[i].minTexCoord + glm::vec2{
-				sprites[i].textureArea.w, 
-				sprites[i].textureArea.h 
+			batch.transforms[i] = camMat * translate * scale;
+			batch.colors[i] = { sprites[i].color, 1.0f };
+			batch.textureAreas[i] = {
+				sprites[i].textureArea.x,
+				sprites[i].textureArea.y, 
+				sprites[i].textureArea.w,
+				sprites[i].textureArea.h
 			};
 		}
 

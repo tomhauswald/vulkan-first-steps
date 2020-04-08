@@ -41,7 +41,7 @@ void Renderer::initialize() {
 	m_unitQuad.setVertices(unitQuadVertices);
 
 	auto spriteBatchVertices = std::vector<VPositionColorTexcoord>(
-		unitQuadVertices.size() * Renderer::spriteBatchSize
+		unitQuadVertices.size() * USpriteBatch::size
 	);
 	
 	for (auto i : range(spriteBatchVertices.size())) {

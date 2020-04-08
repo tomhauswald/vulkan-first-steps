@@ -105,16 +105,16 @@ public:
 		auto& texture = m_renderer.createTexture();
 		texture.updatePixelsWithImage("../assets/images/3.png");
 
-		auto sprites = std::array<Sprite, Renderer::spriteBatchSize>{};
-		for(auto i : range(Renderer::spriteBatchSize)){
+		auto sprites = std::array<Sprite, USpriteBatch::size>{};
+		for(auto i : range(USpriteBatch::size)){
 			auto& sprite = sprites[i];
 
 			sprite.pTexture = &texture;
 
-			sprite.bounds.x = i * width / Renderer::spriteBatchSize;
-			sprite.bounds.y = i * height / Renderer::spriteBatchSize;
-			sprite.bounds.w = width / Renderer::spriteBatchSize;
-			sprite.bounds.h = height / Renderer::spriteBatchSize;
+			sprite.bounds.x = i * width / USpriteBatch::size;
+			sprite.bounds.y = i * height / USpriteBatch::size;
+			sprite.bounds.w = width / USpriteBatch::size;
+			sprite.bounds.h = height / USpriteBatch::size;
 		
 			sprite.textureArea.x = 0;
 			sprite.textureArea.y = 0;

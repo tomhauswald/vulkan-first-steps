@@ -78,13 +78,13 @@ struct UCameraTransform {
 	glm::mat4 cameraTransform;
 };
 
-struct USpriteInfo {
-	alignas(16) glm::mat4 transform;
-	alignas(16) glm::vec3 color;
-	alignas(16) glm::vec2 minTexCoord;
-	alignas(16) glm::vec2 maxTexCoord;
-};
+struct USpriteBatch {
+	static constexpr auto size = 24;
+	glm::mat4 transforms[size];
+	glm::vec4 textureAreas[size];
+	glm::vec4 colors[size];
 
+};
 struct PCInstanceTransform {
 	glm::mat4 modelMatrix;
 };

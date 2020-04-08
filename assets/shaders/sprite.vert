@@ -11,25 +11,20 @@ layout(location = 1) out vec2 fragmentUV;
 #define BATCH_SIZE 24
 #define VERTS_PER_SPRITE 6
 
-struct USpriteInfo {
-	mat4 transform;
-	vec3 color;
-	vec2 minTexCoord;
-	vec2 maxTexCoord;
-};
-
 layout(set = 0, binding = 0) uniform sprite_batch_ {
-	USpriteInfo sprites[BATCH_SIZE];
+	mat4 transforms[BATCH_SIZE];
+	vec4 textureAreas[BATCH_SIZE];
+	vec4 colors[BATCH_SIZE];
 } batch;
 
 void main() {
 
 	int index = gl_VertexIndex / VERTS_PER_SPRITE;
-	gl_Position = batch.sprites[index].transform * vec4(vertexPosition, 1.0);
+	gl_Position = batch.transforms[index] * vec4(vertexPosition, 1.0);
 	
-	fragmentColor = vertexColor * batch.sprites[index].color;
-	fragmentUV = batch.sprites[index].minTexCoord + vertexUV * (
-		  batch.sprites[index].maxTexCoord
-		- batch.sprites[index].minTexCoord
+	fragmentColor = vertexColor * vec3(batch.colors[index]);
+	fragmentUV = batch.textureAreas[index].xy + vertexUV * (
+		  batch.textureAreas[index].zw
+		- batch.textureAreas[index].xy
 	);
 }
