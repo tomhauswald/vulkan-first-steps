@@ -29,7 +29,12 @@ private:
 	std::vector<std::unique_ptr<Mesh>> m_meshes;
 	std::vector<std::unique_ptr<Texture>> m_textures;
 
+	std::unordered_map<Texture const*, std::vector<USpriteBatch>> m_spriteBatches;
+	std::unordered_map<Texture const*, size_t> m_spriteCounts;
+
 	void createWindow();
+
+	void renderSpriteBatches();
 
 public:
 	inline Renderer(RendererSettings const& settings) :
@@ -39,7 +44,9 @@ public:
 		m_pWindow{},
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
-		m_spriteBatchMesh{ m_vulkanContext } {
+		m_spriteBatchMesh{ m_vulkanContext },
+		m_spriteBatches{},
+		m_spriteCounts{} {
 	}
 	
 	inline ~Renderer() {
@@ -93,7 +100,7 @@ public:
 		);
 	}
 
-	void renderSpriteBatch(Camera2d const& camera, std::vector<Sprite> const& sprites);
+	void renderSprite(Sprite const& sprite, Camera2d const& camera);
 
 	inline bool tryBeginFrame() {
 		if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
@@ -105,6 +112,7 @@ public:
 	}
 
 	inline void endFrame() {
+		renderSpriteBatches();
 		m_vulkanContext.onFrameEnd();
 	}
 };

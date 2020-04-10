@@ -116,15 +116,14 @@ public:
 		}
 	}*/
 
-	 std::vector<Sprite> createRandomSpriteBatch(Texture const& texture) {
+	 std::vector<Sprite> createRandomSprites(Texture const& texture, size_t count) {
 		
-		auto sprites = std::vector<Sprite>(USpriteBatch::size);
+		auto sprites = std::vector<Sprite>(count);
 
 		auto width = static_cast<float>(m_settings.renderer.resolution.x);
 		auto height = static_cast<float>(m_settings.renderer.resolution.y);
 
-		for (auto i : range(USpriteBatch::size)) {
-			auto& sprite = sprites[i];
+		for (auto& sprite : sprites) {
 
 			sprite.pTexture = &texture;
 
@@ -136,8 +135,9 @@ public:
 			sprite.textureArea = { 0,0,1,1 };
 
 			sprite.color = { frand(0,1), frand(0,1), frand(0,1), frand(0,1) };
-			sprite.drawOrder = frand(0, 1);
 			sprite.rotation = frand(0, 360);
+
+			sprite.drawOrder = frand(0, 1);
 		}
 
 		return sprites;
@@ -155,15 +155,12 @@ public:
 			m_settings.renderer.resolution.y
 		});
 
-		auto spriteBatches = std::vector<std::vector<Sprite>>(54000 / USpriteBatch::size);
-		for (auto& batch : spriteBatches) {
-			batch = createRandomSpriteBatch(texture);
-		}
+		auto sprites = createRandomSprites(texture, 54000);
 
 		while (m_renderer.isWindowOpen()) {
 			if (m_renderer.tryBeginFrame()) {
-				for (auto const& batch : spriteBatches) {
-					m_renderer.renderSpriteBatch(cam2d, batch);
+				for (auto const& sprite : sprites) {
+					m_renderer.renderSprite(sprite, cam2d);
 				}
 				m_renderer.endFrame();
 			}

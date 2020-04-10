@@ -51,23 +51,36 @@ void Renderer::initialize() {
 	glfwShowWindow(m_pWindow);
 }
 
-void test(Renderer& r) {
-	std::vector<Sprite const*> pFrameSprites(USpriteBatch::size);
-}
-
-void Renderer::renderSpriteBatch(Camera2d const& camera, std::vector<Sprite> const& sprites) {
-
-	auto batch = std::make_unique<USpriteBatch>();
-	for (auto i : range(USpriteBatch::size)) {
-		batch->bounds[i] = camera.screenToNdcRect(sprites[i].bounds);
-		batch->textureAreas[i] = sprites[i].textureArea;
-		batch->colors[i] = sprites[i].color;
-		batch->rotations[i / 4][i % 4] = sprites[i].rotation;
+void Renderer::renderSprite(Sprite const& sprite, Camera2d const& camera) {
+	
+	auto requiredBatches = static_cast<size_t>(std::ceil((m_spriteCounts[sprite.pTexture] + 1.0f) / USpriteBatch::size));
+	while (m_spriteBatches[sprite.pTexture].size() < requiredBatches) {
+		m_spriteBatches[sprite.pTexture].push_back({});
 	}
 
-	setUniforms(*batch);
-	bindTextureSlot(0, *sprites[0].pTexture);
-	renderMesh(m_spriteBatchMesh);
+	auto& batch = m_spriteBatches[sprite.pTexture].back();
+	auto index = m_spriteCounts[sprite.pTexture] % USpriteBatch::size;
+
+	batch.bounds[index] = camera.screenToNdcRect(sprite.bounds);
+	batch.textureAreas[index] = sprite.textureArea;
+	batch.colors[index] = sprite.color;
+	batch.rotations[index / 4][index % 4] = sprite.rotation;
+
+	m_spriteCounts[sprite.pTexture]++;
+}
+
+void Renderer::renderSpriteBatches() {
+
+	for (auto const& [pTex, batches] : m_spriteBatches) {
+		bindTextureSlot(0, *pTex);
+		for (auto const& batch : batches) {
+			setUniforms(batch);
+			renderMesh(m_spriteBatchMesh);
+		}
+	}
+
+	m_spriteBatches.clear();
+	m_spriteCounts.clear();
 }
 
 void Renderer::createWindow() {
