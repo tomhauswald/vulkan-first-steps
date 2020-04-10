@@ -53,20 +53,21 @@ void Renderer::initialize() {
 
 void Renderer::renderSprite(Sprite const& sprite, Camera2d const& camera) {
 	
-	auto requiredBatches = static_cast<size_t>(std::ceil((m_spriteCounts[sprite.pTexture] + 1.0f) / USpriteBatch::size));
-	while (m_spriteBatches[sprite.pTexture].size() < requiredBatches) {
-		m_spriteBatches[sprite.pTexture].push_back({});
+	auto const* txr = sprite.texture();
+	auto requiredBatches = static_cast<size_t>(std::ceil((m_spriteCounts[txr] + 1.0f) / USpriteBatch::size));
+	while (m_spriteBatches[txr].size() < requiredBatches) {
+		m_spriteBatches[txr].push_back({});
 	}
 
-	auto& batch = m_spriteBatches[sprite.pTexture].back();
-	auto index = m_spriteCounts[sprite.pTexture] % USpriteBatch::size;
+	auto& batch = m_spriteBatches[txr].back();
+	auto index = m_spriteCounts[txr] % USpriteBatch::size;
 
-	batch.bounds[index] = camera.screenToNdcRect(sprite.bounds);
-	batch.textureAreas[index] = sprite.textureArea;
-	batch.colors[index] = sprite.color;
-	batch.rotations[index / 4][index % 4] = sprite.rotation;
+	batch.bounds[index] = camera.screenToNdcRect(sprite.position(), sprite.size());
+	batch.textureAreas[index] = sprite.textureArea();
+	batch.colors[index] = sprite.color();
+	batch.rotations[index / 4][index % 4] = sprite.rotation();
 
-	m_spriteCounts[sprite.pTexture]++;
+	m_spriteCounts[txr]++;
 }
 
 void Renderer::renderSpriteBatches() {

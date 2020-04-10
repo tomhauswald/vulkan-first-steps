@@ -66,7 +66,7 @@ auto describeVertexInputAttributes(uint32_t binding) {
 
 struct VPositionColorTexcoord {
 	glm::vec3 position;
-	glm::vec3 color;
+	glm::vec3 m_color;
 	glm::vec2 texcoord;
 
 	static inline auto binding() {

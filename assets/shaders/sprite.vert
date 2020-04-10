@@ -11,13 +11,7 @@ layout(location = 1) out vec2 fragmentUV;
 #define BATCH_SIZE 312
 #define VERTS_PER_SPRITE 6
 
-struct sprite_t {
-	vec4 bounds;
-	vec4 textureArea;
-	vec4 color;
-};
-
-layout(set = 0, binding = 0) uniform sprite_batch_t {
+layout(set = 0, binding = 0) uniform USpriteBatch {
 	vec4  bounds       [BATCH_SIZE];
 	vec4  textureAreas [BATCH_SIZE];
 	vec4  colors       [BATCH_SIZE];
@@ -35,14 +29,12 @@ void main() {
 	vec2 pos = batch.bounds[index].xy + vertexPosition.xy * batch.bounds[index].zw;
 	vec2 mid = batch.bounds[index].xy + 0.5 * batch.bounds[index].zw;
 
-	vec2 rot = vec2(
+	gl_Position = vec4(
 		mid.x + cosrad * (pos.x - mid.x) + sinrad * (pos.y - mid.y),
-		mid.y + cosrad * (pos.y - mid.y) - sinrad * (pos.x - mid.x)
+		mid.y + cosrad * (pos.y - mid.y) - sinrad * (pos.x - mid.x), 
+		0.0, 1.0
 	);
 
-	gl_Position = vec4(rot, 0.0, 1.0);
-
 	fragmentColor = vertexColor * vec3(batch.colors[index]);
-	
 	fragmentUV = batch.textureAreas[index].xy + vertexUV * batch.textureAreas[index].zw;
 }

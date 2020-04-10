@@ -124,20 +124,16 @@ public:
 		auto height = static_cast<float>(m_settings.renderer.resolution.y);
 
 		for (auto& sprite : sprites) {
-
-			sprite.pTexture = &texture;
-
-			sprite.bounds.w = frand(64, 256);
-			sprite.bounds.h = frand(64, 256);
-			sprite.bounds.x = frand(-sprite.bounds.w, width);
-			sprite.bounds.y = frand(-sprite.bounds.h, height);
-
-			sprite.textureArea = { 0,0,1,1 };
-
-			sprite.color = { frand(0,1), frand(0,1), frand(0,1), frand(0,1) };
-			sprite.rotation = frand(0, 360);
-
-			sprite.drawOrder = frand(0, 1);
+			sprite.setTexture(&texture);
+			sprite.setSize({ frand(64, 256) ,frand(64, 256) });
+			sprite.setPosition({ 
+				frand(-sprite.position().x, width), 
+				frand(-sprite.position().y, height) 
+			});
+			sprite.setTextureArea({ 0,0,1,1 });
+			sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
+			sprite.setRotation(frand(0, 360));
+			sprite.setDrawOrder(frand(-1, 1));
 		}
 
 		return sprites;
@@ -155,7 +151,7 @@ public:
 			m_settings.renderer.resolution.y
 		});
 
-		auto sprites = createRandomSprites(texture, 54000);
+		auto sprites = createRandomSprites(texture, 48000);
 
 		while (m_renderer.isWindowOpen()) {
 			if (m_renderer.tryBeginFrame()) {

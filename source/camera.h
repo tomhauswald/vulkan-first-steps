@@ -38,12 +38,12 @@ public:
 		return { vpp.x - 1.0f, 1.0f - vpp.y };
 	}
 
-	inline Rectf screenToNdcRect(Rectf const& rect) const noexcept {
+	inline glm::vec4 screenToNdcRect(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
 		return {
-			rect.x / m_viewportHalfSize.x - 1.0f,
-			1.0f - rect.y / m_viewportHalfSize.y,
-			rect.w / m_viewportHalfSize.x,
-			-rect.h / m_viewportHalfSize.y
+			pos.x / m_viewportHalfSize.x - 1.0f,
+			1.0f - pos.y / m_viewportHalfSize.y,
+			size.x / m_viewportHalfSize.x,
+			-size.y / m_viewportHalfSize.y
 		};
 	}
 };

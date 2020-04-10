@@ -4,42 +4,44 @@
 #include "shader_interface.h"
 #include "texture.h"
 
-struct Rectf {
-	float x;
-	float y;
-	float w;
-	float h;
+class Sprite {
+private:
+	// Screen space (pixel) coordinates.
+	glm::vec2 m_position;
 
-	inline operator glm::vec4() const noexcept {
-		return { x, y, w, h };
-	}
-};
+	// Pixel width and height.
+	glm::vec2 m_size;
 
-struct Boxf {
-	float x;
-	float y;
-	float z;
-	float w;
-	float h;
-	float d;
-};
+	// Source texture.
+	Texture const* m_pTexture;
 
-struct Sprite {
+	// Source texture coordinates.
+	glm::vec4 m_textureArea;
 
-	Rectf bounds;
-	Texture const* pTexture;
-	Rectf textureArea;
-	glm::vec4 color;
-	float rotation;
-	float drawOrder;
+	// Color multiplier.
+	glm::vec4 m_color;
 
-	inline void setPosition(glm::vec2 const& pos) noexcept { 
-		bounds.x = pos.x;
-		bounds.y = pos.y; 
-	}
+	// Clockwise rotation in degrees.
+	float m_rotation; 
 
-	inline void setExtent(glm::vec2 const& ext) noexcept {
-		bounds.w = ext.x;
-		bounds.h = ext.y;
-	}
+	// Sprites with lower draw order are drawn
+	// before (i.e. below) those with higher draw order.
+	float m_drawOrder;
+
+public:
+	GETTER(position, m_position)
+	GETTER(size, m_size)
+	GETTER(texture, m_pTexture)
+	GETTER(textureArea, m_textureArea)
+	GETTER(color, m_color)
+	GETTER(rotation, m_rotation)
+	GETTER(drawOrder, m_drawOrder)
+
+	SETTER(setPosition, m_position)
+	SETTER(setSize, m_size)
+	SETTER(setTexture, m_pTexture)
+	SETTER(setTextureArea, m_textureArea)
+	SETTER(setColor, m_color)
+	SETTER(setRotation, m_rotation)
+	SETTER(setDrawOrder, m_drawOrder)
 };
