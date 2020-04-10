@@ -8,7 +8,7 @@ layout(location = 2) in vec2 vertexUV;
 layout(location = 0) out vec3 fragmentColor;
 layout(location = 1) out vec2 fragmentUV;
 
-#define BATCH_SIZE 1024
+#define BATCH_SIZE 312
 #define VERTS_PER_SPRITE 6
 
 struct sprite_t {
@@ -18,22 +18,31 @@ struct sprite_t {
 };
 
 layout(set = 0, binding = 0) uniform sprite_batch_t {
-	sprite_t sprites[BATCH_SIZE];
+	vec4  bounds       [BATCH_SIZE];
+	vec4  textureAreas [BATCH_SIZE];
+	vec4  colors       [BATCH_SIZE];
+	vec4  rotations    [BATCH_SIZE / 4];
 } batch;
 
 void main() {
 
 	int index = gl_VertexIndex / VERTS_PER_SPRITE;
-	
-	gl_Position = vec4(
-		batch.sprites[index].bounds.xy 
-		+ vertexPosition.xy * batch.sprites[index].bounds.zw,
-		0.0, 
-		1.0
+
+	float rad = batch.rotations[index / 4][index % 4] / 180.0 * 3.1416;
+	float cosrad = cos(rad);
+	float sinrad = sin(rad);
+
+	vec2 pos = batch.bounds[index].xy + vertexPosition.xy * batch.bounds[index].zw;
+	vec2 mid = batch.bounds[index].xy + 0.5 * batch.bounds[index].zw;
+
+	vec2 rot = vec2(
+		mid.x + cosrad * (pos.x - mid.x) + sinrad * (pos.y - mid.y),
+		mid.y + cosrad * (pos.y - mid.y) - sinrad * (pos.x - mid.x)
 	);
 
-	fragmentColor = vertexColor * vec3(batch.sprites[index].color);
+	gl_Position = vec4(rot, 0.0, 1.0);
+
+	fragmentColor = vertexColor * vec3(batch.colors[index]);
 	
-	fragmentUV = batch.sprites[index].textureArea.xy 
-	           + vertexUV * batch.sprites[index].textureArea.zw;
+	fragmentUV = batch.textureAreas[index].xy + vertexUV * batch.textureAreas[index].zw;
 }

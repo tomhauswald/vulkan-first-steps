@@ -51,34 +51,18 @@ void Renderer::initialize() {
 	glfwShowWindow(m_pWindow);
 }
 
+void test(Renderer& r) {
+	std::vector<Sprite const*> pFrameSprites(USpriteBatch::size);
+}
 
 void Renderer::renderSpriteBatch(Camera2d const& camera, std::vector<Sprite> const& sprites) {
 
 	auto batch = std::make_unique<USpriteBatch>();
-
-	static const auto hw = m_settings.resolution.x / 2.0f;
-	static const auto hh = m_settings.resolution.y / 2.0f;
-
 	for (auto i : range(USpriteBatch::size)) {
-
-		batch->sprites[i].bounds = {
-			sprites[i].bounds.x / hw - 1,
-			1 - sprites[i].bounds.y / hh,
-			sprites[i].bounds.w / hw,
-			-sprites[i].bounds.h / hh
-		};
-
-		batch->sprites[i].textureArea = {
-			sprites[i].textureArea.x,
-			sprites[i].textureArea.y,
-			sprites[i].textureArea.w,
-			sprites[i].textureArea.h
-		};
-
-		batch->sprites[i].color = {
-			sprites[i].color, 
-			sprites[i].drawOrder 
-		};
+		batch->bounds[i] = camera.screenToNdcRect(sprites[i].bounds);
+		batch->textureAreas[i] = sprites[i].textureArea;
+		batch->colors[i] = sprites[i].color;
+		batch->rotations[i / 4][i % 4] = sprites[i].rotation;
 	}
 
 	setUniforms(*batch);

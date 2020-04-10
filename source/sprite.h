@@ -9,6 +9,10 @@ struct Rectf {
 	float y;
 	float w;
 	float h;
+
+	inline operator glm::vec4() const noexcept {
+		return { x, y, w, h };
+	}
 };
 
 struct Boxf {
@@ -25,7 +29,8 @@ struct Sprite {
 	Rectf bounds;
 	Texture const* pTexture;
 	Rectf textureArea;
-	glm::vec3 color;
+	glm::vec4 color;
+	float rotation;
 	float drawOrder;
 
 	inline void setPosition(glm::vec2 const& pos) noexcept { 

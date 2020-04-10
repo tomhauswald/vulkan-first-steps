@@ -123,6 +123,10 @@ size_t uniqueElemCount(Container const& container) {
 	return unique.size();
 }
 
+inline float frand(float min, float max) {
+	return min + (max - min) * rand() / (float)RAND_MAX;
+};
+
 #define GETTER(name, member) \
 	inline decltype(member) const& name() const noexcept { \
 		return member; \

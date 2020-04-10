@@ -92,6 +92,7 @@ public:
 	Engine(EngineSettings const& settings) : 
 		m_settings{ settings }, 
 		m_renderer{ settings.renderer } {
+		srand(time(nullptr));
 	}
 
 	/*void run3dTest() {
@@ -115,26 +116,18 @@ public:
 		}
 	}*/
 
-	void run2dTest() {
-		m_renderer.initialize();
+	 std::vector<Sprite> createRandomSpriteBatch(Texture const& texture) {
+		
+		auto sprites = std::vector<Sprite>(USpriteBatch::size);
 
 		auto width = static_cast<float>(m_settings.renderer.resolution.x);
 		auto height = static_cast<float>(m_settings.renderer.resolution.y);
 
-		auto& texture = m_renderer.createTexture();
-		texture.updatePixelsWithImage("../assets/images/3.png");
-
-		srand(time(nullptr));
-		auto const frand = [](float min, float max) {
-			return min + (max - min) * rand() / (float)RAND_MAX;
-		};
-
-		auto sprites = std::vector<Sprite>(USpriteBatch::size);
-		for(auto i : range(USpriteBatch::size)){
+		for (auto i : range(USpriteBatch::size)) {
 			auto& sprite = sprites[i];
 
 			sprite.pTexture = &texture;
-			
+
 			sprite.bounds.w = frand(64, 256);
 			sprite.bounds.h = frand(64, 256);
 			sprite.bounds.x = frand(-sprite.bounds.w, width);
@@ -142,18 +135,36 @@ public:
 
 			sprite.textureArea = { 0,0,1,1 };
 
-			sprite.color = { frand(0,1), frand(0,1), frand(0,1) };
-			sprite.drawOrder = frand(0,1);
+			sprite.color = { frand(0,1), frand(0,1), frand(0,1), frand(0,1) };
+			sprite.drawOrder = frand(0, 1);
+			sprite.rotation = frand(0, 360);
 		}
+
+		return sprites;
+	}
+
+	void run2dTest() {
+
+		m_renderer.initialize();
+
+		auto& texture = m_renderer.createTexture();
+		texture.updatePixelsWithImage("../assets/images/3.png");
 	
 		auto cam2d = Camera2d({
 			m_settings.renderer.resolution.x,
 			m_settings.renderer.resolution.y
 		});
 
+		auto spriteBatches = std::vector<std::vector<Sprite>>(54000 / USpriteBatch::size);
+		for (auto& batch : spriteBatches) {
+			batch = createRandomSpriteBatch(texture);
+		}
+
 		while (m_renderer.isWindowOpen()) {
 			if (m_renderer.tryBeginFrame()) {
-				m_renderer.renderSpriteBatch(cam2d, sprites);
+				for (auto const& batch : spriteBatches) {
+					m_renderer.renderSpriteBatch(cam2d, batch);
+				}
 				m_renderer.endFrame();
 			}
 			m_renderer.handleWindowEvents();

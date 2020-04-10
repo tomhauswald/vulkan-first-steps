@@ -5,6 +5,14 @@
 
 #include "common.h"
 
+struct VulkanLimits {
+	static constexpr size_t maxUniformBufferRange = 16384;
+	static constexpr size_t minUniformBufferOffsetAlignment = 256;
+	static constexpr size_t maxPushConstantsSize = 128;
+	static constexpr size_t maxBoundDescriptorSets = 4;
+	static constexpr size_t maxDescriptorSetUniformBuffersDynamic = 8;
+};
+
 template<typename VPositionColorTexcoord>
 auto defaultDescribeVertexInputBinding(uint32_t binding) {
 	return VkVertexInputBindingDescription{
@@ -79,15 +87,12 @@ struct UCameraTransform {
 	glm::mat4 cameraTransform;
 };
 
-struct USprite {
-	glm::vec4 bounds;
-	glm::vec4 textureArea;
-	glm::vec4 color;
-};
-
 struct USpriteBatch {
-	static constexpr auto size = 1024;
-	USprite sprites[size];
+	static constexpr auto size = 312;
+	glm::vec4 bounds[size];
+	glm::vec4 textureAreas[size];
+	glm::vec4 colors[size];
+	glm::vec4 rotations[size/4];
 };
 
 struct PCInstanceTransform {

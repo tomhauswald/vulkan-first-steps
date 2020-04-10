@@ -77,8 +77,7 @@ public:
 
 	template<typename Uniforms>
 	void setUniforms(Uniforms const& uniforms) {
-		m_vulkanContext.appendUniformData(&uniforms, sizeof(Uniforms));
-		m_vulkanContext.bindUniformData(sizeof(Uniforms));
+		m_vulkanContext.setUniformData(&uniforms, sizeof(Uniforms));
 	}
 
 	template<typename PushConstants>

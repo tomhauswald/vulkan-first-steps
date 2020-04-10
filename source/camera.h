@@ -6,16 +6,18 @@ class Camera2d {
 private:
 	glm::vec2 m_position;
 	glm::vec2 m_viewportSize;
+	glm::vec2 m_viewportHalfSize;
 	float m_zoom;
 
 public:
 	inline Camera2d(glm::vec2 viewportSize) :
 		m_position{ 0,0 },
 		m_viewportSize{ std::move(viewportSize) },
+		m_viewportHalfSize{ m_viewportSize / 2.0f },
 		m_zoom{ 1 }{
 	}
 
-	inline bool pointVisible(glm::vec2 const& point) const noexcept {
+	inline bool isScreenPointVisible(glm::vec2 const& point) const noexcept {
 		return (
 			(point.x > m_position.x) &&
 			(point.y > m_position.y) &&
@@ -24,8 +26,25 @@ public:
 		);
 	}
 
-	inline glm::vec2 transformPoint(glm::vec2 const& point) const noexcept {
-		return { point.x - m_position.x, point.y - m_position.y };
+	inline glm::vec2 screenToViewportPoint(glm::vec2 const& point) const noexcept {
+		return {
+			point.x - m_position.x,
+			point.y - m_position.y
+		};
+	}
+
+	inline glm::vec2 screenToNdcPoint(glm::vec2 const& point) const noexcept {
+		auto vpp = screenToViewportPoint(point) / m_viewportHalfSize;
+		return { vpp.x - 1.0f, 1.0f - vpp.y };
+	}
+
+	inline Rectf screenToNdcRect(Rectf const& rect) const noexcept {
+		return {
+			rect.x / m_viewportHalfSize.x - 1.0f,
+			1.0f - rect.y / m_viewportHalfSize.y,
+			rect.w / m_viewportHalfSize.x,
+			-rect.h / m_viewportHalfSize.y
+		};
 	}
 };
 
