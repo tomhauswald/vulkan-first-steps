@@ -53,35 +53,48 @@ void Renderer::initialize() {
 
 void Renderer::renderSprite(Sprite const& sprite, Camera2d const& camera) {
 	
-	auto const* txr = sprite.texture();
-	auto requiredBatches = static_cast<size_t>(std::ceil((m_spriteCounts[txr] + 1.0f) / USpriteBatch::size));
-	while (m_spriteBatches[txr].size() < requiredBatches) {
-		m_spriteBatches[txr].push_back({});
+	auto const* pTexture = &sprite.texture();
+	
+	SpriteQueue* pQueue = nullptr;
+	size_t queueIndex;
+	
+	// Queue for this texture already exists.
+	if (contains(m_spriteQueues, [pTexture](SpriteQueue const& q) { 
+			return q.pTexture == pTexture; 
+		}, &queueIndex)
+	) {
+		pQueue = &m_spriteQueues[queueIndex];
+		if (pQueue->numSprites % USpriteBatch::size == USpriteBatch::size - 1) {
+			pQueue->batches.push_back({ }); // Add new empty batch.
+		}
+	}
+	
+	// Create queue for new texture.
+	else {
+		m_spriteQueues.push_back({ pTexture, 0, {USpriteBatch{}} });
+		pQueue = &m_spriteQueues.back();
 	}
 
-	auto& batch = m_spriteBatches[txr].back();
-	auto index = m_spriteCounts[txr] % USpriteBatch::size;
-
+	auto index = pQueue->numSprites % USpriteBatch::size;
+	auto& batch = pQueue->batches.back();
 	batch.bounds[index] = camera.screenToNdcRect(sprite.position(), sprite.size());
 	batch.textureAreas[index] = sprite.textureArea();
 	batch.colors[index] = sprite.color();
-	batch.rotations[index / 4][index % 4] = sprite.rotation();
+	batch.trigonometry[index / 2][0] = glm::sin(glm::radians(sprite.rotation()));
+	batch.trigonometry[index / 2][1] = glm::cos(glm::radians(sprite.rotation()));
 
-	m_spriteCounts[txr]++;
+	pQueue->numSprites++;
 }
 
 void Renderer::renderSpriteBatches() {
-
-	for (auto const& [pTex, batches] : m_spriteBatches) {
-		bindTextureSlot(0, *pTex);
-		for (auto const& batch : batches) {
+	for (auto const& queue : m_spriteQueues) {
+		bindTextureSlot(0, *queue.pTexture);
+		for (auto const& batch : queue.batches) {
 			setUniforms(batch);
 			renderMesh(m_spriteBatchMesh);
 		}
 	}
-
-	m_spriteBatches.clear();
-	m_spriteCounts.clear();
+	m_spriteQueues.clear();
 }
 
 void Renderer::createWindow() {

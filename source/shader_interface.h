@@ -88,11 +88,11 @@ struct UCameraTransform {
 };
 
 struct USpriteBatch {
-	static constexpr auto size = 312;
+	static constexpr auto size = 292;
 	glm::vec4 bounds[size];
 	glm::vec4 textureAreas[size];
 	glm::vec4 colors[size];
-	glm::vec4 rotations[size/4];
+	glm::vec4 trigonometry[size/2];
 };
 
 struct PCInstanceTransform {

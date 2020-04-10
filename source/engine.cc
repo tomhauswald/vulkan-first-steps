@@ -116,21 +116,19 @@ public:
 		}
 	}*/
 
-	 std::vector<Sprite> createRandomSprites(Texture const& texture, size_t count) {
-		
-		auto sprites = std::vector<Sprite>(count);
+	std::vector<Sprite> createRandomSprites(Texture const& texture, size_t count) {
+
+		auto sprites = std::vector<Sprite>(count, { texture });
 
 		auto width = static_cast<float>(m_settings.renderer.resolution.x);
 		auto height = static_cast<float>(m_settings.renderer.resolution.y);
 
 		for (auto& sprite : sprites) {
-			sprite.setTexture(&texture);
-			sprite.setSize({ frand(64, 256) ,frand(64, 256) });
-			sprite.setPosition({ 
-				frand(-sprite.position().x, width), 
-				frand(-sprite.position().y, height) 
+			sprite.setSize({ frand(64, 256), frand(64, 256) });
+			sprite.setPosition({
+				frand(-sprite.size().x, width),
+				frand(-sprite.size().y, height)
 			});
-			sprite.setTextureArea({ 0,0,1,1 });
 			sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
 			sprite.setRotation(frand(0, 360));
 			sprite.setDrawOrder(frand(-1, 1));
@@ -151,7 +149,7 @@ public:
 			m_settings.renderer.resolution.y
 		});
 
-		auto sprites = createRandomSprites(texture, 48000);
+		auto sprites = createRandomSprites(texture, 54000);
 
 		while (m_renderer.isWindowOpen()) {
 			if (m_renderer.tryBeginFrame()) {

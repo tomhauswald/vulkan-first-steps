@@ -8,30 +8,32 @@ layout(location = 2) in vec2 vertexUV;
 layout(location = 0) out vec3 fragmentColor;
 layout(location = 1) out vec2 fragmentUV;
 
-#define BATCH_SIZE 312
+#define BATCH_SIZE 292
 #define VERTS_PER_SPRITE 6
 
 layout(set = 0, binding = 0) uniform USpriteBatch {
-	vec4  bounds       [BATCH_SIZE];
-	vec4  textureAreas [BATCH_SIZE];
-	vec4  colors       [BATCH_SIZE];
-	vec4  rotations    [BATCH_SIZE / 4];
+	vec4 bounds       [BATCH_SIZE];
+	vec4 textureAreas [BATCH_SIZE];
+	vec4 colors       [BATCH_SIZE];
+	vec4 trigonometry [BATCH_SIZE / 2];
 } batch;
 
 void main() {
 
 	int index = gl_VertexIndex / VERTS_PER_SPRITE;
 
-	float rad = batch.rotations[index / 4][index % 4] / 180.0 * 3.1416;
-	float cosrad = cos(rad);
-	float sinrad = sin(rad);
+	float sine   = batch.trigonometry[index / 2][0];
+	float cosine = batch.trigonometry[index / 2][1];
 
-	vec2 pos = batch.bounds[index].xy + vertexPosition.xy * batch.bounds[index].zw;
-	vec2 mid = batch.bounds[index].xy + 0.5 * batch.bounds[index].zw;
+	vec2 rot = vec2( 
+		cosine * (vertexPosition.x - 0.5) 
+		+ sine * (vertexPosition.y - 0.5),
+		cosine * (vertexPosition.y - 0.5) 
+		- sine * (vertexPosition.x - 0.5)
+	);
 
 	gl_Position = vec4(
-		mid.x + cosrad * (pos.x - mid.x) + sinrad * (pos.y - mid.y),
-		mid.y + cosrad * (pos.y - mid.y) - sinrad * (pos.x - mid.x), 
+		batch.bounds[index].xy + (rot + 0.5) * batch.bounds[index].zw,
 		0.0, 1.0
 	);
 

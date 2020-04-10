@@ -14,6 +14,12 @@ struct RendererSettings {
 	bool vsyncEnabled;
 };
 
+struct SpriteQueue {
+	Texture const* pTexture;
+	size_t numSprites;
+	std::vector<USpriteBatch> batches;
+};
+
 class Renderer {
 private:
 	RendererSettings m_settings;
@@ -28,9 +34,8 @@ private:
 
 	std::vector<std::unique_ptr<Mesh>> m_meshes;
 	std::vector<std::unique_ptr<Texture>> m_textures;
-
-	std::unordered_map<Texture const*, std::vector<USpriteBatch>> m_spriteBatches;
-	std::unordered_map<Texture const*, size_t> m_spriteCounts;
+	
+	std::vector<SpriteQueue> m_spriteQueues;
 
 	void createWindow();
 
@@ -45,8 +50,7 @@ public:
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
 		m_spriteBatchMesh{ m_vulkanContext },
-		m_spriteBatches{},
-		m_spriteCounts{} {
+		m_spriteQueues{} {
 	}
 	
 	inline ~Renderer() {
