@@ -17,7 +17,7 @@ struct RendererSettings {
 struct SpriteQueue {
 	Texture const* pTexture;
 	size_t numSprites;
-	std::vector<USpriteBatch> batches;
+	std::vector<std::unique_ptr<USpriteBatch>> batches;
 };
 
 class Renderer {

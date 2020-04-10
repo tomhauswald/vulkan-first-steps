@@ -53,6 +53,9 @@ void Renderer::initialize() {
 
 void Renderer::renderSprite(Sprite const& sprite, Camera2d const& camera) {
 	
+	// Visibility test.
+	if (!camera.isScreenRectVisible(sprite.position(), sprite.size())) return;
+	
 	auto const* pTexture = &sprite.texture();
 	
 	SpriteQueue* pQueue = nullptr;
@@ -65,36 +68,42 @@ void Renderer::renderSprite(Sprite const& sprite, Camera2d const& camera) {
 	) {
 		pQueue = &m_spriteQueues[queueIndex];
 		if (pQueue->numSprites % USpriteBatch::size == USpriteBatch::size - 1) {
-			pQueue->batches.push_back({ }); // Add new empty batch.
+			pQueue->batches.push_back(std::make_unique<USpriteBatch>()); // Add new empty batch.
 		}
 	}
 	
 	// Create queue for new texture.
 	else {
-		m_spriteQueues.push_back({ pTexture, 0, {USpriteBatch{}} });
+		m_spriteQueues.push_back({});
+		m_spriteQueues.back().pTexture = pTexture;
+		m_spriteQueues.back().numSprites = 0;
+		m_spriteQueues.back().batches.push_back(std::make_unique<USpriteBatch>());
 		pQueue = &m_spriteQueues.back();
 	}
 
 	auto index = pQueue->numSprites % USpriteBatch::size;
 	auto& batch = pQueue->batches.back();
-	batch.bounds[index] = camera.screenToNdcRect(sprite.position(), sprite.size());
-	batch.textureAreas[index] = sprite.textureArea();
-	batch.colors[index] = sprite.color();
-	batch.trigonometry[index / 2][0] = glm::sin(glm::radians(sprite.rotation()));
-	batch.trigonometry[index / 2][1] = glm::cos(glm::radians(sprite.rotation()));
+	batch->bounds[index] = camera.screenToNdcRect(sprite.position(), sprite.size());
+	batch->textureAreas[index] = sprite.textureArea();
+	batch->colors[index] = sprite.color();
+	batch->trigonometry[index / 2][2 * (index % 2) + 0] = glm::sin(glm::radians(sprite.rotation()));
+	batch->trigonometry[index / 2][2 * (index % 2) + 1] = glm::cos(glm::radians(sprite.rotation()));
 
 	pQueue->numSprites++;
 }
 
 void Renderer::renderSpriteBatches() {
+	size_t rendered = 0;
 	for (auto const& queue : m_spriteQueues) {
 		bindTextureSlot(0, *queue.pTexture);
-		for (auto const& batch : queue.batches) {
-			setUniforms(batch);
+		for (auto const& pBatch : queue.batches) {
+			setUniforms(*pBatch);
 			renderMesh(m_spriteBatchMesh);
 		}
+		rendered += queue.numSprites;
 	}
 	m_spriteQueues.clear();
+	std::cout << rendered << lf;
 }
 
 void Renderer::createWindow() {

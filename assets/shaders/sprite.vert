@@ -22,8 +22,8 @@ void main() {
 
 	int index = gl_VertexIndex / VERTS_PER_SPRITE;
 
-	float sine   = batch.trigonometry[index / 2][0];
-	float cosine = batch.trigonometry[index / 2][1];
+	float sine   = batch.trigonometry[index / 2][2 * (index % 2) + 0];
+	float cosine = batch.trigonometry[index / 2][2 * (index % 2) + 1];
 
 	vec2 rot = vec2( 
 		cosine * (vertexPosition.x - 0.5) 

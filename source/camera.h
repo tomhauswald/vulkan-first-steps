@@ -17,35 +17,46 @@ public:
 		m_zoom{ 1 }{
 	}
 
-	inline bool isScreenPointVisible(glm::vec2 const& point) const noexcept {
+	inline bool isScreenPointVisible(glm::vec2 const& pos) const noexcept {
+		auto absNdc = glm::abs(screenToNdcPoint(pos));
+		return absNdc.x <= 1.0f && absNdc.y <= 1.0f;
+	}
+
+	inline bool isScreenRectVisible(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
 		return (
-			(point.x > m_position.x) &&
-			(point.y > m_position.y) &&
-			(point.x < m_position.x + m_viewportSize.x) &&
-			(point.y < m_position.y + m_viewportSize.y)
+			isScreenPointVisible(pos) ||
+			isScreenPointVisible(pos + size) ||
+			isScreenPointVisible(pos + glm::vec2{ size.x, 0 }) ||
+			isScreenPointVisible(pos + glm::vec2{ 0, size.y })
 		);
 	}
 
 	inline glm::vec2 screenToViewportPoint(glm::vec2 const& point) const noexcept {
-		return {
-			point.x - m_position.x,
-			point.y - m_position.y
-		};
+		return { point.x - m_position.x, point.y - m_position.y };
 	}
 
 	inline glm::vec2 screenToNdcPoint(glm::vec2 const& point) const noexcept {
 		auto vpp = screenToViewportPoint(point) / m_viewportHalfSize;
-		return { vpp.x - 1.0f, 1.0f - vpp.y };
+		return m_zoom * glm::vec2{ vpp.x - 1.0f, 1.0f - vpp.y };
 	}
 
 	inline glm::vec4 screenToNdcRect(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
-		return {
-			pos.x / m_viewportHalfSize.x - 1.0f,
-			1.0f - pos.y / m_viewportHalfSize.y,
+		auto vpp = screenToViewportPoint(pos) / m_viewportHalfSize;
+		return m_zoom * glm::vec4 {
+			vpp.x - 1.0f,
+			1.0f - vpp.y,
 			size.x / m_viewportHalfSize.x,
 			-size.y / m_viewportHalfSize.y
 		};
 	}
+
+	GETTER(position, m_position)
+	GETTER(viewportSize, m_viewportSize)
+	GETTER(zoom, m_zoom)
+
+	SETTER(setPosition, m_position)
+	SETTER(setViewportSize, m_viewportSize)
+	SETTER(setZoom, m_zoom)
 };
 
 class Camera3d {

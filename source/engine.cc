@@ -139,6 +139,8 @@ public:
 
 	void run2dTest() {
 
+		auto startTime = std::chrono::high_resolution_clock::now();
+
 		m_renderer.initialize();
 
 		auto& texture = m_renderer.createTexture();
@@ -149,10 +151,14 @@ public:
 			m_settings.renderer.resolution.y
 		});
 
-		auto sprites = createRandomSprites(texture, 54000);
+		auto sprites = createRandomSprites(texture, 400);
 
 		while (m_renderer.isWindowOpen()) {
 			if (m_renderer.tryBeginFrame()) {
+				
+				auto seconds = (std::chrono::high_resolution_clock::now() - startTime).count() / 1e9;
+				cam2d.setZoom(1.0f + seconds * 0.01f);
+
 				for (auto const& sprite : sprites) {
 					m_renderer.renderSprite(sprite, cam2d);
 				}
