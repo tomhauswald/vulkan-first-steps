@@ -24,11 +24,13 @@ private:
 	// Clockwise rotation in degrees.
 	float m_rotation; 
 
-	// Sprites with lower draw order are drawn
-	// before (i.e. below) those with higher draw order.
-	float m_drawOrder;
+	// Sprites with higher layer number are drawn over
+	// sprites with lower layer numbers.
+	uint8_t m_layer;
 
 public:
+	static constexpr uint8_t numLayers = 4;
+
 	inline Sprite(Texture const& texture) :
 		m_position{},
 		m_size{texture.width(), texture.height()},
@@ -36,7 +38,12 @@ public:
 		m_textureArea{ 0,0,1,1 },
 		m_color{ 1,1,1,1 },
 		m_rotation{ 0 },
-		m_drawOrder{ 0 } {
+		m_layer{ 0 } {
+	}
+
+	inline void setLayer(uint8_t layer) noexcept {
+		crashIf(layer >= numLayers);
+		m_layer = layer;
 	}
 	
 	GETTER(position, m_position)
@@ -45,12 +52,11 @@ public:
 	GETTER(textureArea, m_textureArea)
 	GETTER(color, m_color)
 	GETTER(rotation, m_rotation)
-	GETTER(drawOrder, m_drawOrder)
+	GETTER(layer, m_layer)
 
 	SETTER(setPosition, m_position)
 	SETTER(setSize, m_size)
 	SETTER(setTextureArea, m_textureArea)
 	SETTER(setColor, m_color)
 	SETTER(setRotation, m_rotation)
-	SETTER(setDrawOrder, m_drawOrder)
 };

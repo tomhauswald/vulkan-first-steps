@@ -51,59 +51,36 @@ void Renderer::initialize() {
 	glfwShowWindow(m_pWindow);
 }
 
-void Renderer::renderSprite(Sprite const& sprite, Camera2d const& camera) {
-	
-	// Visibility test.
-	if (!camera.isScreenRectVisible(sprite.position(), sprite.size())) return;
-	
-	auto const* pTexture = &sprite.texture();
-	
-	SpriteQueue* pQueue = nullptr;
-	size_t queueIndex;
-	
-	// Queue for this texture already exists.
-	if (contains(m_spriteQueues, [pTexture](SpriteQueue const& q) { 
-			return q.pTexture == pTexture; 
-		}, &queueIndex)
-	) {
-		pQueue = &m_spriteQueues[queueIndex];
-		if (pQueue->numSprites % USpriteBatch::size == USpriteBatch::size - 1) {
-			pQueue->batches.push_back(std::make_unique<USpriteBatch>()); // Add new empty batch.
-		}
-	}
-	
-	// Create queue for new texture.
-	else {
-		m_spriteQueues.push_back({});
-		m_spriteQueues.back().pTexture = pTexture;
-		m_spriteQueues.back().numSprites = 0;
-		m_spriteQueues.back().batches.push_back(std::make_unique<USpriteBatch>());
-		pQueue = &m_spriteQueues.back();
-	}
-
-	auto index = pQueue->numSprites % USpriteBatch::size;
-	auto& batch = pQueue->batches.back();
-	batch->bounds[index] = camera.screenToNdcRect(sprite.position(), sprite.size());
-	batch->textureAreas[index] = sprite.textureArea();
-	batch->colors[index] = sprite.color();
-	batch->trigonometry[index / 2][2 * (index % 2) + 0] = glm::sin(glm::radians(sprite.rotation()));
-	batch->trigonometry[index / 2][2 * (index % 2) + 1] = glm::cos(glm::radians(sprite.rotation()));
-
-	pQueue->numSprites++;
-}
-
 void Renderer::renderSpriteBatches() {
-	size_t rendered = 0;
-	for (auto const& queue : m_spriteQueues) {
-		bindTextureSlot(0, *queue.pTexture);
-		for (auto const& pBatch : queue.batches) {
-			setUniforms(*pBatch);
-			renderMesh(m_spriteBatchMesh);
+	for (auto& layer : m_layerSprites) {
+		for (auto& [pTexture, sprites] : layer) {
+
+			bindTextureSlot(0, *pTexture);
+
+			auto numBatches = (size_t)std::ceil(sprites.size() / (float)USpriteBatch::size);
+			auto pBatches = std::make_unique<USpriteBatch[]>(numBatches);
+
+			for (auto spriteIndex : range(sprites.size())) {
+
+				auto batchIndex = spriteIndex / USpriteBatch::size;
+				auto& batch = pBatches[batchIndex];
+				auto const* sprite = sprites[spriteIndex];
+
+				auto k = spriteIndex % USpriteBatch::size;
+				batch.bounds[k] = m_camera2d.screenToNdcRect(sprite->position(), sprite->size());
+				batch.textureAreas[k] = sprite->textureArea();
+				batch.colors[k] = sprite->color();
+				batch.trigonometry[k / 2][2 * (k % 2) + 0] = glm::sin(glm::radians(sprite->rotation()));
+				batch.trigonometry[k / 2][2 * (k % 2) + 1] = glm::cos(glm::radians(sprite->rotation()));
+			}
+			
+			for (auto batchIndex : range(numBatches)) {
+				setUniforms(pBatches[batchIndex]);
+				renderMesh(m_spriteBatchMesh);
+			}
 		}
-		rendered += queue.numSprites;
+		layer.clear();
 	}
-	m_spriteQueues.clear();
-	std::cout << rendered << lf;
 }
 
 void Renderer::createWindow() {

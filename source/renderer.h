@@ -5,6 +5,7 @@
 #include "sprite.h"
 #include "camera.h"
 
+#include <map>
 #include <glm/gtx/transform.hpp>
 
 struct RendererSettings {
@@ -12,12 +13,6 @@ struct RendererSettings {
 	std::string windowTitle;
 	glm::uvec2 resolution;
 	bool vsyncEnabled;
-};
-
-struct SpriteQueue {
-	Texture const* pTexture;
-	size_t numSprites;
-	std::vector<std::unique_ptr<USpriteBatch>> batches;
 };
 
 class Renderer {
@@ -35,7 +30,13 @@ private:
 	std::vector<std::unique_ptr<Mesh>> m_meshes;
 	std::vector<std::unique_ptr<Texture>> m_textures;
 	
-	std::vector<SpriteQueue> m_spriteQueues;
+	Camera2d m_camera2d;
+	std::vector<
+		std::map<
+			Texture const*, 
+			std::vector<Sprite const*>
+		>
+	> m_layerSprites;
 
 	void createWindow();
 
@@ -50,7 +51,8 @@ public:
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
 		m_spriteBatchMesh{ m_vulkanContext },
-		m_spriteQueues{} {
+		m_camera2d({ m_settings.resolution.x, m_settings.resolution.y }),
+		m_layerSprites(Sprite::numLayers) {
 	}
 	
 	inline ~Renderer() {
@@ -104,7 +106,11 @@ public:
 		);
 	}
 
-	void renderSprite(Sprite const& sprite, Camera2d const& camera);
+	inline void renderSprite(Sprite const& sprite) {
+		if (m_camera2d.isScreenRectVisible(sprite.position(), sprite.size())) {
+			m_layerSprites[sprite.layer()][&sprite.texture()].push_back(&sprite);
+		}
+	}
 
 	inline bool tryBeginFrame() {
 		if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
@@ -119,4 +125,7 @@ public:
 		renderSpriteBatches();
 		m_vulkanContext.onFrameEnd();
 	}
+
+	GETTER(camera2d, m_camera2d)
+	SETTER(setCamera2d, m_camera2d)
 };

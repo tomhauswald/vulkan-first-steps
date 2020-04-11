@@ -2,6 +2,7 @@
 #include <glm/gtx/transform.hpp>
 #include <chrono>
 #include "camera.h"
+#include "static_sprite_obj.h"
 
 struct EngineSettings {
 	RendererSettings renderer;
@@ -87,11 +88,13 @@ class Engine {
 private:
 	[[maybe_unused]] EngineSettings const& m_settings;
 	Renderer m_renderer;
+	std::vector<std::unique_ptr<GameObject>> m_objects;
 
 public:
 	Engine(EngineSettings const& settings) : 
 		m_settings{ settings }, 
-		m_renderer{ settings.renderer } {
+		m_renderer{ settings.renderer },
+		m_objects{} {
 		srand(time(nullptr));
 	}
 
@@ -116,51 +119,55 @@ public:
 		}
 	}*/
 
-	std::vector<Sprite> createRandomSprites(Texture const& texture, size_t count) {
-
-		auto sprites = std::vector<Sprite>(count, { texture });
-
-		auto width = static_cast<float>(m_settings.renderer.resolution.x);
-		auto height = static_cast<float>(m_settings.renderer.resolution.y);
-
-		for (auto& sprite : sprites) {
-			sprite.setSize({ frand(64, 256), frand(64, 256) });
-			sprite.setPosition({
-				frand(-sprite.size().x, width),
-				frand(-sprite.size().y, height)
-			});
-			sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
-			sprite.setRotation(frand(0, 360));
-			sprite.setDrawOrder(frand(-1, 1));
-		}
-
-		return sprites;
+	template<typename Obj>
+	Obj& add(std::unique_ptr<Obj> obj) {
+		auto& ref = *obj;
+		m_objects.push_back(std::move(obj));
+		return ref;
 	}
 
-	void run2dTest() {
-
-		auto startTime = std::chrono::high_resolution_clock::now();
+	void run() {
 
 		m_renderer.initialize();
 
-		auto& texture = m_renderer.createTexture();
-		texture.updatePixelsWithImage("../assets/images/3.png");
-	
-		auto cam2d = Camera2d({
-			m_settings.renderer.resolution.x,
-			m_settings.renderer.resolution.y
-		});
+		std::vector<Texture*> textures{};
 
-		auto sprites = createRandomSprites(texture, 400);
+		for (auto file : { "3", "6", "9", "12", "15", "18", "20", "22", "24" }) {
+			textures.push_back(&m_renderer.createTexture());
+			textures.back()->updatePixelsWithImage("../assets/images/"s + file + ".png"s);
+		}
 
+		for (auto i : range(1e4)) {
+			auto& sprite = add(std::make_unique<DynamicSpriteObj>(*textures[rand() % textures.size()]));
+			sprite.setPosition({
+				frand(-1.0f * sprite.texture().width(), m_settings.renderer.resolution.x),
+				frand(-1.0f * sprite.texture().height(), m_settings.renderer.resolution.y)
+			});
+			sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
+			sprite.setRotation(frand(0, 360));
+			sprite.setAcceleration({ frand(-1,1), frand(-1,1) });
+			sprite.setLayer(rand() % Sprite::numLayers);
+		}
+
+		auto prev = std::chrono::high_resolution_clock::now(); 
+		
 		while (m_renderer.isWindowOpen()) {
-			if (m_renderer.tryBeginFrame()) {
-				
-				auto seconds = (std::chrono::high_resolution_clock::now() - startTime).count() / 1e9;
-				cam2d.setZoom(1.0f + seconds * 0.01f);
 
-				for (auto const& sprite : sprites) {
-					m_renderer.renderSprite(sprite, cam2d);
+			auto now = std::chrono::high_resolution_clock::now();
+			auto dt = std::chrono::duration_cast<std::chrono::duration<float>>(now - prev).count();
+			prev = now;
+
+			std::remove_if(m_objects.begin(), m_objects.end(), [](std::unique_ptr<GameObject> const& pObj) {
+				return !pObj->alive();
+			});
+
+			for (auto& object : m_objects) {
+				object->update(dt);
+			}
+
+			if (m_renderer.tryBeginFrame()) {
+				for (auto& object : m_objects) {
+					object->draw(m_renderer);
 				}
 				m_renderer.endFrame();
 			}
@@ -173,10 +180,10 @@ int main() {
 	Engine({
 		.renderer = {
 			.windowTitle = "Vulkan Renderer",
-			.resolution = {1440, 900},
+			.resolution = {1600, 900},
 			.vsyncEnabled = false
 		}
-	}).run2dTest();
+	}).run();
 
 	std::cout << "Press [ENTER] exit application..." << lf;
 	(void) getchar();

@@ -18,8 +18,8 @@ public:
 	}
 
 	inline bool isScreenPointVisible(glm::vec2 const& pos) const noexcept {
-		auto absNdc = glm::abs(screenToNdcPoint(pos));
-		return absNdc.x <= 1.0f && absNdc.y <= 1.0f;
+		auto dist = m_zoom *  glm::abs(pos - (m_position + m_viewportHalfSize));
+		return dist.x <= m_viewportHalfSize.x && dist.y <= m_viewportHalfSize.y;
 	}
 
 	inline bool isScreenRectVisible(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {

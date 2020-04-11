@@ -5,7 +5,7 @@ layout(location = 0) in vec3 vertexPosition;
 layout(location = 1) in vec3 vertexColor;
 layout(location = 2) in vec2 vertexUV;
 
-layout(location = 0) out vec3 fragmentColor;
+layout(location = 0) out vec4 fragmentColor;
 layout(location = 1) out vec2 fragmentUV;
 
 #define BATCH_SIZE 292
@@ -37,6 +37,6 @@ void main() {
 		0.0, 1.0
 	);
 
-	fragmentColor = vertexColor * vec3(batch.colors[index]);
+	fragmentColor = vec4(vertexColor, 1.0) * batch.colors[index];
 	fragmentUV = batch.textureAreas[index].xy + vertexUV * batch.textureAreas[index].zw;
 }

@@ -1174,11 +1174,11 @@ void VulkanContext::createPipeline(
 
 	auto uniformPoolSize = VkDescriptorPoolSize{};
 	uniformPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uniformPoolSize.descriptorCount = 256;
+	uniformPoolSize.descriptorCount = UINT16_MAX;
 
 	auto samplerPoolSize = VkDescriptorPoolSize{};
 	samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerPoolSize.descriptorCount = 256; 
+	samplerPoolSize.descriptorCount = UINT16_MAX;
 
 	auto poolSizes = { uniformPoolSize, samplerPoolSize };
 
@@ -1186,7 +1186,7 @@ void VulkanContext::createPipeline(
 	descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	descPoolInfo.poolSizeCount = std::size(poolSizes);
 	descPoolInfo.pPoolSizes = std::data(poolSizes);
-	descPoolInfo.maxSets = 512;
+	descPoolInfo.maxSets = 2 * UINT16_MAX;
 
 	crashIf(VK_SUCCESS != vkCreateDescriptorPool(
 		m_device,
