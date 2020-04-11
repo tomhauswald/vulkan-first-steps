@@ -2,7 +2,7 @@
 #include <glm/gtx/transform.hpp>
 #include <chrono>
 #include "camera.h"
-#include "static_sprite_obj.h"
+#include "sprite_objects.h"
 
 struct EngineSettings {
 	RendererSettings renderer;
@@ -138,7 +138,7 @@ public:
 		}
 
 		for (auto i : range(1e4)) {
-			auto& sprite = add(std::make_unique<DynamicSpriteObj>(*textures[rand() % textures.size()]));
+			auto& sprite = add(std::make_unique<KinematicSpriteObj>(*textures[rand() % textures.size()]));
 			sprite.setPosition({
 				frand(-1.0f * sprite.texture().width(), m_settings.renderer.resolution.x),
 				frand(-1.0f * sprite.texture().height(), m_settings.renderer.resolution.y)

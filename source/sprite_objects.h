@@ -3,9 +3,9 @@
 #include "game_object.h"
 #include "renderer.h"
 
-class StaticSpriteObj : public GameObject, public Sprite {
+class StationarySpriteObj : public GameObject, public Sprite {
 public:
-	inline StaticSpriteObj(Texture const& texture) :
+	inline StationarySpriteObj(Texture const& texture) :
 		GameObject{}, Sprite(texture) {
 	}
 	
@@ -18,20 +18,20 @@ public:
 	}
 };
 
-class DynamicSpriteObj : public StaticSpriteObj {
+class KinematicSpriteObj : public StationarySpriteObj {
 private:
 	glm::vec2 m_velocity;
 	glm::vec2 m_acceleration;
 
 public:
-	inline DynamicSpriteObj(Texture const& texture) :
-		StaticSpriteObj(texture), m_velocity{}, m_acceleration{} {
+	inline KinematicSpriteObj(Texture const& texture) :
+		StationarySpriteObj(texture), m_velocity{}, m_acceleration{} {
 	}
 
 	inline virtual void update(float dt) override {
 		setPosition(position() + m_velocity * dt);
 		m_velocity += m_acceleration * dt;
-		StaticSpriteObj::update(dt);
+		StationarySpriteObj::update(dt);
 	}
 
 	GETTER(velocity, m_velocity)
