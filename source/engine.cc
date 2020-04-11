@@ -84,9 +84,29 @@ void renderCubes(Renderer& r, Mesh const& cube) {
 	}
 }
 
+struct FPSCounterObj : public GameObject {
+private:
+	size_t m_frames;
+	float m_seconds;
+
+public:
+	FPSCounterObj() : m_frames{}, m_seconds{} { }
+	virtual void update(float dt) override {
+		m_seconds += dt;
+		m_frames++;
+		if(m_seconds >= 1.0f) {
+			std::cout << static_cast<size_t>(m_frames / m_seconds) << lf;
+			m_seconds = 0.0f;
+			m_frames = 0;
+		}
+		GameObject::update(dt);
+	}
+	virtual ~FPSCounterObj() { }
+};
+
 class Engine {
 private:
-	[[maybe_unused]] EngineSettings const& m_settings;
+	EngineSettings const& m_settings;
 	Renderer m_renderer;
 	std::vector<std::unique_ptr<GameObject>> m_objects;
 
@@ -96,6 +116,7 @@ public:
 		m_renderer{ settings.renderer },
 		m_objects{} {
 		srand(time(nullptr));
+		add(std::make_unique<FPSCounterObj>());
 	}
 
 	/*void run3dTest() {
@@ -138,7 +159,9 @@ public:
 		}
 
 		for (auto i : range(1e4)) {
-			auto& sprite = add(std::make_unique<KinematicSpriteObj>(*textures[rand() % textures.size()]));
+			auto& sprite = add(std::make_unique<KinematicSpriteObj>(
+				*textures[i % textures.size()]
+			));
 			sprite.setPosition({
 				frand(-1.0f * sprite.texture().width(), m_settings.renderer.resolution.x),
 				frand(-1.0f * sprite.texture().height(), m_settings.renderer.resolution.y)
@@ -146,7 +169,7 @@ public:
 			sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
 			sprite.setRotation(frand(0, 360));
 			sprite.setAcceleration({ frand(-1,1), frand(-1,1) });
-			sprite.setLayer(rand() % Sprite::numLayers);
+			sprite.setLayer(i % Sprite::numLayers);
 		}
 
 		auto prev = std::chrono::high_resolution_clock::now(); 

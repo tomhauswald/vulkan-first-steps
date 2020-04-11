@@ -41,7 +41,7 @@ public:
 		m_layer{ 0 } {
 	}
 
-	inline void setLayer(uint8_t layer) noexcept {
+	inline void setLayer(uint8_t layer) {
 		crashIf(layer >= numLayers);
 		m_layer = layer;
 	}

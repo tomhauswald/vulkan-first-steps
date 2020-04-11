@@ -9,6 +9,9 @@ public:
 		GameObject{}, Sprite(texture) {
 	}
 	
+	inline virtual ~StationarySpriteObj() {
+	}
+	
 	inline virtual void update(float dt) override {
 		GameObject::update(dt);
 	}
@@ -26,6 +29,9 @@ private:
 public:
 	inline KinematicSpriteObj(Texture const& texture) :
 		StationarySpriteObj(texture), m_velocity{}, m_acceleration{} {
+	}
+
+	inline virtual ~KinematicSpriteObj() {
 	}
 
 	inline virtual void update(float dt) override {

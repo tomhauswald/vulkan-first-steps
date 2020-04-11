@@ -11,6 +11,7 @@
 #include <vector>
 #include <sstream>
 #include <string_view>
+#include <type_traits>
 
 using namespace std::string_literals;
 
@@ -128,7 +129,7 @@ inline float frand(float min, float max) {
 };
 
 #define GETTER(name, member) \
-	inline decltype(member) const& name() const noexcept { \
+	inline std::remove_reference<decltype(member)>::type const& name() const noexcept { \
 		return member; \
 	}
 

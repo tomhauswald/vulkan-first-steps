@@ -6,8 +6,12 @@ CXX_FLAGS := \
 	-std=$(CXX_STD) \
 	-MMD -MP \
 	-Wall -Wextra -Wpedantic -Werror \
-	-Wpessimizing-move -Wredundant-move \
-	-Wno-c99-extensions
+	-Wno-unused-parameter \
+	-Wno-unused-private-field \
+	-Wno-c99-extensions \
+	-Wno-deprecated-enum-enum-conversion \
+	`libpng-config --cflags` \
+	-I/usr/local/include/png++
 
 ifdef RELEASE
 CXX_FLAGS += -O3 -DNDEBUG
@@ -16,7 +20,7 @@ CXX_FLAGS += -g -O0 -D_DEBUG
 endif
 
 LD        := clang++-10
-LD_FLAGS  := -std=$(CXX_STD) `pkg-config --static --libs glfw3` -lvulkan 
+LD_FLAGS  := -std=$(CXX_STD) `libpng-config --ldflags` `pkg-config --static --libs glfw3` -lvulkan 
 
 BINARY  := ./bin/$(if $(RELEASE),release,debug).elf
 SOURCES := $(wildcard ../source/*.cc)

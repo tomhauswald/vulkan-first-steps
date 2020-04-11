@@ -46,8 +46,8 @@ public:
 	inline Renderer(RendererSettings const& settings) :
 		m_settings{ settings },
 		m_aspectRatio{ settings.resolution.x / (float)settings.resolution.y },
-		m_vulkanContext{},
 		m_pWindow{},
+		m_vulkanContext{},
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
 		m_spriteBatchMesh{ m_vulkanContext },
