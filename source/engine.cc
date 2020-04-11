@@ -158,18 +158,18 @@ public:
 			textures.back()->updatePixelsWithImage("../assets/images/"s + file + ".png"s);
 		}
 
-		for (auto i : range(1e4)) {
-			auto& sprite = add(std::make_unique<KinematicSpriteObj>(
-				*textures[i % textures.size()]
-			));
-			sprite.setPosition({
-				frand(-1.0f * sprite.texture().width(), m_settings.renderer.resolution.x),
-				frand(-1.0f * sprite.texture().height(), m_settings.renderer.resolution.y)
-			});
-			sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
-			sprite.setRotation(frand(0, 360));
-			sprite.setAcceleration({ frand(-1,1), frand(-1,1) });
-			sprite.setLayer(i % Sprite::numLayers);
+		auto const tilesize = 16;
+		for(auto x : range(m_settings.renderer.resolution.x / tilesize)) {
+			for(auto y : range(m_settings.renderer.resolution.y / tilesize)) {
+				for(auto z : range(Sprite::numLayers)) {
+					auto& sprite = add(std::make_unique<StationarySpriteObj>(*textures[rand() % textures.size()]));
+					sprite.setPosition({x * tilesize, y * tilesize});
+					sprite.setSize({tilesize, tilesize});
+					sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
+					sprite.setRotation(frand(0, 360));
+					sprite.setLayer(z);
+				}
+			}
 		}
 
 		auto prev = std::chrono::high_resolution_clock::now(); 
@@ -184,12 +184,9 @@ public:
 				return !pObj->alive();
 			});
 
-			for (auto& object : m_objects) {
-				object->update(dt);
-			}
-
 			if (m_renderer.tryBeginFrame()) {
 				for (auto& object : m_objects) {
+					object->update(dt);
 					object->draw(m_renderer);
 				}
 				m_renderer.endFrame();
