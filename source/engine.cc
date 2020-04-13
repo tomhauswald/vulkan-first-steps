@@ -2,7 +2,8 @@
 #include <glm/gtx/transform.hpp>
 #include <chrono>
 #include "camera.h"
-#include "sprite_objects.h"
+#include "sprite.h"
+#include "tilemap.h"
 
 struct EngineSettings {
 	RendererSettings renderer;
@@ -109,6 +110,7 @@ private:
 	EngineSettings const& m_settings;
 	Renderer m_renderer;
 	std::vector<std::unique_ptr<GameObject>> m_objects;
+	Texture const* m_pDoorTexture;
 
 public:
 	Engine(EngineSettings const& settings) : 
@@ -116,11 +118,10 @@ public:
 		m_renderer{ settings.renderer },
 		m_objects{} {
 		srand(time(nullptr));
-		add(std::make_unique<FPSCounterObj>());
 	}
 
 	/*void run3dTest() {
-		m_renderer.initialize();
+		m_renderer.initialize(false);
 
 		auto width = static_cast<float>(m_settings.renderer.resolution.x);
 		auto height = static_cast<float>(m_settings.renderer.resolution.y);
@@ -147,28 +148,104 @@ public:
 		return ref;
 	}
 
-	void run() {
+	void createRoom(Tilemap8& tilemap, glm::u64vec2 const& roomPosition, glm::u64vec2 const& roomSize) {
 
-		m_renderer.initialize();
+		static constexpr auto floorTiles = std::array{
+			30, 30, 30, 30, 30, 30, 30, 30,
+			30, 30, 30, 30, 30, 30, 30, 30,
+			30, 30, 30, 30, 30, 30, 30, 30,
+			32, 32, 32, 32, 38, 38, 38, 38,
+			31, 31, 31, 31, 37, 39, 44, 45
+		};
 
-		std::vector<Texture*> textures{};
+		static constexpr auto wallTopTiles = std::array{
+			2, 3, 4, 75, 76
+		};
 
-		for (auto file : { "3", "6", "9", "12", "15", "18", "20", "22", "24" }) {
-			textures.push_back(&m_renderer.createTexture());
-			textures.back()->updatePixelsWithImage("../assets/images/"s + file + ".png"s);
+		static constexpr size_t wallFrontTile = 10;
+		static constexpr size_t wallLeftTile = 58;
+		static constexpr size_t wallRightTile = 57;
+
+		// floor
+		for (auto dy : range(roomSize.y)) {
+			auto y = roomPosition.y + dy;
+			for (auto dx : range(roomSize.x)) {
+				auto x = roomPosition.x + dx;
+				tilemap.setTileAt({ x,y,0 }, randomPick(floorTiles));
+			}
 		}
 
-		auto const tilesize = 16;
-		for(auto x : range(m_settings.renderer.resolution.x / tilesize)) {
-			for(auto y : range(m_settings.renderer.resolution.y / tilesize)) {
-				for(auto z : range(Sprite::numLayers)) {
-					auto& sprite = add(std::make_unique<StationarySpriteObj>(*textures[rand() % textures.size()]));
-					sprite.setPosition({x * tilesize, y * tilesize});
-					sprite.setSize({tilesize, tilesize});
-					sprite.setColor({ frand(0,1), frand(0,1), frand(0,1), frand(0,1) });
-					sprite.setRotation(frand(0, 360));
-					sprite.setLayer(z);
-				}
+		// top left corner
+		tilemap.setTileAt({ roomPosition.x, roomPosition.y - 2, 1 }, 52);
+		tilemap.setTileAt({ roomPosition.x, roomPosition.y - 1, 0 }, 59);
+
+		// top right corner
+		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y - 2, 1 }, 53);
+		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y - 1, 0 }, 60);
+
+		// bottom left corner
+		tilemap.setTileAt({ roomPosition.x, roomPosition.y + roomSize.y - 1, 1 }, 66);
+		tilemap.setTileAt({ roomPosition.x, roomPosition.y + roomSize.y, 0 }, 73);
+
+		// bottom right corner
+		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y + roomSize.y - 1, 1 }, 67);
+		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y + roomSize.y, 0 }, 74);
+
+		// horizontal walls
+		for (size_t dx = 1; dx <= roomSize.x - 2; ++dx) {
+			auto x = roomPosition.x + dx;
+			tilemap.setTileAt({ x, roomPosition.y - 2, 1 }, randomPick(wallTopTiles));
+			tilemap.setTileAt({ x, roomPosition.y - 1, 0 }, wallFrontTile);
+			tilemap.setTileAt({ x, roomPosition.y + roomSize.y, 0 }, wallFrontTile);
+			tilemap.setTileAt({ x, roomPosition.y + roomSize.y - 1, 1 }, randomPick(wallTopTiles));
+		}
+
+		// vertical walls
+		for (auto dy : range(roomSize.y - 1)) {
+			auto y = roomPosition.y + dy;
+			tilemap.setTileAt({ roomPosition.x, y, 1 }, wallLeftTile);
+			tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, y, 1 }, wallRightTile);
+		}
+
+		auto& door = add(std::make_unique<Sprite>(*m_pDoorTexture));
+		door.setTextureArea({ 0.0f, 0.0f, 0.5f, 1.0f });
+		door.setSize(35.0f / 16.0f * tilemap.tileSize());
+		door.setPosition({
+			(roomPosition.x + roomSize.x / 2.0f) * tilemap.tileSize().x - door.size().x / 2.0f,
+			roomPosition.y * tilemap.tileSize().y - door.size().y
+		});
+		door.setLayer(2);
+	}
+
+	void run() {
+
+		m_renderer.initialize(true);
+
+		auto& counter = add(std::make_unique<FPSCounterObj>());
+
+		auto& doorTexture = m_renderer.createTexture();
+		doorTexture.updatePixelsWithImage("../assets/images/door.png");
+		m_pDoorTexture = &doorTexture;
+
+		auto& tileset = m_renderer.createTexture();
+		tileset.updatePixelsWithImage("../assets/images/dungeon.png");
+		
+		auto& tilemap = add(std::make_unique<Tilemap8>(
+			glm::u64vec3{ 1e4, 1e3, Sprite::numLayers }, 
+			tileset, 
+			glm::uvec2{ 16, 16 }, 
+			glm::vec2{ 32, 32 }
+		));
+
+		auto roomSideLen = 3;
+		auto roomSpacing = glm::u64vec2{ 2, 4 };
+
+		for (auto x : range(30)) {
+			for (auto y : range(30)) {
+				createRoom(tilemap, {
+					1 + x * (roomSideLen + roomSpacing.x), 
+					3 + y * (roomSideLen + roomSpacing.y) 
+				}, { roomSideLen, roomSideLen });
 			}
 		}
 

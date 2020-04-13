@@ -1,6 +1,6 @@
 #include "renderer.h"
 
-void Renderer::initialize() {	
+void Renderer::initialize(bool mode2d) {	
 
 	createWindow();
 
@@ -11,10 +11,12 @@ void Renderer::initialize() {
 	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
 	m_vulkanContext.createDepthBuffer();
 	m_vulkanContext.createPipeline(
-		"vert-sprite",
+		mode2d ? "vert-sprite" : "vert-textured",
 		"frag-textured",
 		VPositionColorTexcoord::binding(),
-		VPositionColorTexcoord::attributes()
+		VPositionColorTexcoord::attributes(),
+		!mode2d,
+		mode2d ? VK_FILTER_NEAREST : VK_FILTER_LINEAR
 	);
 
 	auto w = m_settings.resolution.x;
@@ -67,7 +69,7 @@ void Renderer::renderSpriteBatches() {
 				auto const* sprite = sprites[spriteIndex];
 
 				auto k = spriteIndex % USpriteBatch::size;
-				batch.bounds[k] = m_camera2d.screenToNdcRect(sprite->position(), sprite->size());
+				batch.bounds[k] = m_camera2d.worldToNdcRect(sprite->position(), sprite->size());
 				batch.textureAreas[k] = sprite->textureArea();
 				batch.colors[k] = sprite->color();
 				batch.trigonometry[k / 2][2 * (k % 2) + 0] = glm::sin(glm::radians(sprite->rotation()));

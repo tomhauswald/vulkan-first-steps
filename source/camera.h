@@ -17,31 +17,31 @@ public:
 		m_zoom{ 1 }{
 	}
 
-	inline bool isScreenPointVisible(glm::vec2 const& pos) const noexcept {
+	inline bool isWorldPointVisible(glm::vec2 const& pos) const noexcept {
 		auto dist = m_zoom *  glm::abs(pos - (m_position + m_viewportHalfSize));
 		return dist.x <= m_viewportHalfSize.x && dist.y <= m_viewportHalfSize.y;
 	}
 
-	inline bool isScreenRectVisible(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
+	inline bool isWorldRectVisible(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
 		return (
-			isScreenPointVisible(pos) ||
-			isScreenPointVisible(pos + size) ||
-			isScreenPointVisible(pos + glm::vec2{ size.x, 0 }) ||
-			isScreenPointVisible(pos + glm::vec2{ 0, size.y })
+			isWorldPointVisible(pos) ||
+			isWorldPointVisible(pos + size) ||
+			isWorldPointVisible(pos + glm::vec2{ size.x, 0 }) ||
+			isWorldPointVisible(pos + glm::vec2{ 0, size.y })
 		);
 	}
 
-	inline glm::vec2 screenToViewportPoint(glm::vec2 const& point) const noexcept {
+	inline glm::vec2 worldToViewportPoint(glm::vec2 const& point) const noexcept {
 		return { point.x - m_position.x, point.y - m_position.y };
 	}
 
-	inline glm::vec2 screenToNdcPoint(glm::vec2 const& point) const noexcept {
-		auto vpp = screenToViewportPoint(point) / m_viewportHalfSize;
+	inline glm::vec2 worldToNdcPoint(glm::vec2 const& point) const noexcept {
+		auto vpp = worldToViewportPoint(point) / m_viewportHalfSize;
 		return m_zoom * glm::vec2{ vpp.x - 1.0f, 1.0f - vpp.y };
 	}
 
-	inline glm::vec4 screenToNdcRect(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
-		auto vpp = screenToViewportPoint(pos) / m_viewportHalfSize;
+	inline glm::vec4 worldToNdcRect(glm::vec2 const& pos, glm::vec2 const& size) const noexcept {
+		auto vpp = worldToViewportPoint(pos) / m_viewportHalfSize;
 		return m_zoom * glm::vec4 {
 			vpp.x - 1.0f,
 			1.0f - vpp.y,

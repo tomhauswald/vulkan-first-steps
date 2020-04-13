@@ -3,7 +3,7 @@
 
 #include <fstream>
 
-constexpr auto validateReleaseBuild = true;
+constexpr auto validateReleaseBuild = false;
 constexpr auto validate = debug || validateReleaseBuild;
 
 constexpr auto requiredDeviceExtensions = std::array{
@@ -906,10 +906,10 @@ void VulkanContext::createPipeline(
 	std::string const& vertexShaderName,
 	std::string const& fragmentShaderName,
 	VkVertexInputBindingDescription const& binding,
-	std::vector<VkVertexInputAttributeDescription> const& attributes
+	std::vector<VkVertexInputAttributeDescription> const& attributes,
+	bool enableDepthTest,
+	VkFilter textureFilterMode
 ) {
-	constexpr auto enableDepthTest = false;
-
 	m_vertexBinding = binding;
 	m_vertexAttributes = attributes;
 
@@ -1203,8 +1203,8 @@ void VulkanContext::createPipeline(
 
 	auto samplerInfo = VkSamplerCreateInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = textureFilterMode;
+	samplerInfo.magFilter = textureFilterMode;
 	samplerInfo.maxAnisotropy = 1.0f;
 	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	

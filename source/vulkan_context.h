@@ -186,7 +186,9 @@ public:
 		std::string const& vertexShaderName,
 		std::string const& fragmentShaderName,
 		VkVertexInputBindingDescription const& binding,
-		std::vector<VkVertexInputAttributeDescription> const& attributes
+		std::vector<VkVertexInputAttributeDescription> const& attributes,
+		bool enableDepthTest,
+		VkFilter textureFilterMode
 	);
 
 	VulkanTextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);

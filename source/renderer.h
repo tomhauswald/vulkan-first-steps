@@ -2,7 +2,7 @@
 
 #include "vulkan_context.h"
 #include "mesh.h"
-#include "sprite.h"
+#include "hw_sprite_info.h"
 #include "camera.h"
 
 #include <map>
@@ -34,7 +34,7 @@ private:
 	std::vector<
 		std::map<
 			Texture const*, 
-			std::vector<Sprite const*>
+			std::vector<HwSpriteInfo const*>
 		>
 	> m_layerSprites;
 
@@ -52,7 +52,7 @@ public:
 		m_viewportQuad{ m_vulkanContext },
 		m_spriteBatchMesh{ m_vulkanContext },
 		m_camera2d({ m_settings.resolution.x, m_settings.resolution.y }),
-		m_layerSprites(Sprite::numLayers) {
+		m_layerSprites(HwSpriteInfo::numLayers) {
 	}
 	
 	inline ~Renderer() {
@@ -64,7 +64,7 @@ public:
 		glfwTerminate();
 	}
 	
-	void initialize();
+	void initialize(bool mode2d);
 
 	inline Mesh& createMesh() {
 		m_meshes.push_back(std::make_unique<Mesh>(m_vulkanContext));
@@ -106,8 +106,8 @@ public:
 		);
 	}
 
-	inline void renderSprite(Sprite const& sprite) {
-		if (m_camera2d.isScreenRectVisible(sprite.position(), sprite.size())) {
+	inline void renderSprite(HwSpriteInfo const& sprite) {
+		if (m_camera2d.isWorldRectVisible(sprite.position(), sprite.size())) {
 			m_layerSprites[sprite.layer()][&sprite.texture()].push_back(&sprite);
 		}
 	}

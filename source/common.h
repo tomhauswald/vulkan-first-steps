@@ -105,6 +105,17 @@ std::vector<Elem> range(size_t count) {
 	return vec;
 }
 
+// Constructs a vector containing the values:
+// [ first, first+1, ..., last-1, last ].
+template<typename Elem = size_t>
+std::vector<Elem> range(Elem first, Elem last) {
+	auto vec = std::vector<Elem>(last - first + 1);
+	for (size_t i = 0; i < last - first + 1; ++i){
+		vec[i] = first + i;
+	}
+	return vec;
+}
+
 // Constructs a vector containing the same value repeatedly.
 template<typename Elem>
 std::vector<Elem> repeat(Elem const& value, size_t times) {
@@ -128,8 +139,13 @@ inline float frand(float min, float max) {
 	return min + (max - min) * rand() / (float)RAND_MAX;
 };
 
+template<typename Range>
+inline typename Range::value_type randomPick(Range const& choices) {
+	return choices[rand() % std::size(choices)];
+}
+
 #define GETTER(name, member) \
-	inline std::remove_reference<decltype(member)>::type const& name() const noexcept { \
+	inline auto const& name() const noexcept { \
 		return member; \
 	}
 

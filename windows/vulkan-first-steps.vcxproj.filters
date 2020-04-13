@@ -50,13 +50,16 @@
     <ClInclude Include="..\source\texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\sprite.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\source\game_object.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\sprite_objects.h">
+    <ClInclude Include="..\source\tilemap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\hw_sprite_info.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\sprite.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
