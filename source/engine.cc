@@ -148,73 +148,116 @@ public:
 		return ref;
 	}
 
-	void createRoom(Tilemap8& tilemap, glm::u64vec2 const& roomPosition, glm::u64vec2 const& roomSize) {
+	static constexpr auto floorTiles = std::array {
+		30, 30, 30, 30, 30, 30, 30, 30,
+		30, 30, 30, 30, 30, 30, 30, 30,
+		30, 30, 30, 30, 30, 30, 30, 30,
+		32, 32, 32, 32, 38, 38, 38, 38,
+		31, 31, 31, 31, 37, 39, 44, 45
+	};
 
-		static constexpr auto floorTiles = std::array{
-			30, 30, 30, 30, 30, 30, 30, 30,
-			30, 30, 30, 30, 30, 30, 30, 30,
-			30, 30, 30, 30, 30, 30, 30, 30,
-			32, 32, 32, 32, 38, 38, 38, 38,
-			31, 31, 31, 31, 37, 39, 44, 45
-		};
+	static constexpr auto wallTopTiles = std::array {
+		2, 3, 4, 75, 76
+	};
 
-		static constexpr auto wallTopTiles = std::array{
-			2, 3, 4, 75, 76
-		};
+	static constexpr size_t wallFrontTile = 10;
+	static constexpr size_t wallLeftTile = 58;
+	static constexpr size_t wallRightTile = 57;
 
-		static constexpr size_t wallFrontTile = 10;
-		static constexpr size_t wallLeftTile = 58;
-		static constexpr size_t wallRightTile = 57;
+	static constexpr size_t wallTLCornerTopTile = 52;
+	static constexpr size_t wallTLCornerFrontTile = 59;
 
-		// floor
-		for (auto dy : range(roomSize.y)) {
-			auto y = roomPosition.y + dy;
-			for (auto dx : range(roomSize.x)) {
-				auto x = roomPosition.x + dx;
-				tilemap.setTileAt({ x,y,0 }, randomPick(floorTiles));
+	static constexpr size_t wallTRCornerTopTile = 53;
+	static constexpr size_t wallTRCornerFrontTile = 60;
+
+	static constexpr size_t wallBLCornerTopTile = 66;
+	static constexpr size_t wallBLCornerFrontTile = 73;
+
+	static constexpr size_t wallBRCornerTopTile = 67;
+	static constexpr size_t wallBRCornerFrontTile = 74;
+
+	void createCornerAboveLeft(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y - 2, 1 }, wallTLCornerTopTile);
+		tilemap.setTileAt({ pos.x, pos.y - 1, 0 }, wallTLCornerFrontTile);
+	}
+
+	void createCornerAboveRight(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y - 2, 1 }, wallTRCornerTopTile);
+		tilemap.setTileAt({ pos.x, pos.y - 1, 0 }, wallTRCornerFrontTile);
+	}
+
+	void createCornerBelowLeft(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallBLCornerTopTile);
+		tilemap.setTileAt({ pos.x, pos.y + 1, 0 }, wallBLCornerFrontTile);
+	}
+
+	void createCornerBelowRight(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallBRCornerTopTile);
+		tilemap.setTileAt({ pos.x, pos.y + 1, 0 }, wallBRCornerFrontTile);
+	}
+
+	void createWallAbove(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y - 2, 1 }, randomPick(wallTopTiles));
+		tilemap.setTileAt({ pos.x, pos.y - 1, 0 }, wallFrontTile);
+	}
+
+	void createWallBelow(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y, 1 }, randomPick(wallTopTiles));
+		tilemap.setTileAt({ pos.x, pos.y + 1, 0 }, wallFrontTile);
+	}
+
+	void createWallToLeft(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallLeftTile);
+	}
+
+	void createWallToRight(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallRightTile);
+	}
+
+	void createFloor(Tilemap8& tilemap, glm::u64vec2 const& pos) {
+		tilemap.setTileAt({ pos.x, pos.y, 0 }, randomPick(floorTiles));
+	}
+
+	void createRoom(Tilemap8& tilemap, glm::u64vec2 const& center, glm::u64vec2 const& size, std::vector<bool> const& mask) {
+
+		auto pos = glm::u64vec2{};
+
+		for (auto dx : range(size.x)) {
+
+			pos.x = center.x + dx;
+
+			for (auto dy : range(size.y)) {
+
+				pos.y = center.y + dy;
+				auto index = dx + dy * size.x;
+
+				auto canStand     = mask[index];
+				auto canMoveLeft  = (dx > 0          && mask[index - 1]);
+				auto canMoveRight = (dx < size.x - 1 && mask[index + 1]);
+				auto canMoveUp    = (dy > 0          && mask[index - size.x]);
+				auto canMoveDown  = (dy < size.y - 1 && mask[index + size.x]);
+
+				if (!canStand) continue;
+				
+				createFloor(tilemap, pos);
+
+				if (!canMoveUp) createWallAbove(tilemap, pos);
+
+				if (!canMoveDown) createWallBelow(tilemap, pos);
+
+				if (!canMoveLeft) {
+					if(canMoveUp && canMoveDown) createWallToLeft(tilemap, pos);
+					if (!canMoveUp) createCornerAboveLeft(tilemap, pos);
+					if (!canMoveDown) createCornerBelowLeft(tilemap, pos);
+				}
+
+				if (!canMoveRight) {
+					if (canMoveUp && canMoveDown) createWallToRight(tilemap, pos);
+					if (!canMoveUp) createCornerAboveRight(tilemap, pos);
+					if (!canMoveDown) createCornerBelowRight(tilemap, pos);
+				}
 			}
 		}
-
-		// top left corner
-		tilemap.setTileAt({ roomPosition.x, roomPosition.y - 2, 1 }, 52);
-		tilemap.setTileAt({ roomPosition.x, roomPosition.y - 1, 0 }, 59);
-
-		// top right corner
-		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y - 2, 1 }, 53);
-		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y - 1, 0 }, 60);
-
-		// bottom left corner
-		tilemap.setTileAt({ roomPosition.x, roomPosition.y + roomSize.y - 1, 1 }, 66);
-		tilemap.setTileAt({ roomPosition.x, roomPosition.y + roomSize.y, 0 }, 73);
-
-		// bottom right corner
-		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y + roomSize.y - 1, 1 }, 67);
-		tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, roomPosition.y + roomSize.y, 0 }, 74);
-
-		// horizontal walls
-		for (size_t dx = 1; dx <= roomSize.x - 2; ++dx) {
-			auto x = roomPosition.x + dx;
-			tilemap.setTileAt({ x, roomPosition.y - 2, 1 }, randomPick(wallTopTiles));
-			tilemap.setTileAt({ x, roomPosition.y - 1, 0 }, wallFrontTile);
-			tilemap.setTileAt({ x, roomPosition.y + roomSize.y, 0 }, wallFrontTile);
-			tilemap.setTileAt({ x, roomPosition.y + roomSize.y - 1, 1 }, randomPick(wallTopTiles));
-		}
-
-		// vertical walls
-		for (auto dy : range(roomSize.y - 1)) {
-			auto y = roomPosition.y + dy;
-			tilemap.setTileAt({ roomPosition.x, y, 1 }, wallLeftTile);
-			tilemap.setTileAt({ roomPosition.x + roomSize.x - 1, y, 1 }, wallRightTile);
-		}
-
-		auto& door = add(std::make_unique<Sprite>(*m_pDoorTexture));
-		door.setTextureArea({ 0.0f, 0.0f, 0.5f, 1.0f });
-		door.setSize(35.0f / 16.0f * tilemap.tileSize());
-		door.setPosition({
-			(roomPosition.x + roomSize.x / 2.0f) * tilemap.tileSize().x - door.size().x / 2.0f,
-			roomPosition.y * tilemap.tileSize().y - door.size().y
-		});
-		door.setLayer(2);
 	}
 
 	void run() {
@@ -237,17 +280,33 @@ public:
 			glm::vec2{ 32, 32 }
 		));
 
-		auto roomSideLen = 3;
-		auto roomSpacing = glm::u64vec2{ 2, 4 };
-
-		for (auto x : range(30)) {
-			for (auto y : range(30)) {
-				createRoom(tilemap, {
-					1 + x * (roomSideLen + roomSpacing.x), 
-					3 + y * (roomSideLen + roomSpacing.y) 
-				}, { roomSideLen, roomSideLen });
-			}
+		auto columnHeights = std::vector<size_t>(20);
+		for (size_t i = 0; i < columnHeights.size(); i += 2) {
+			columnHeights[i] = columnHeights[i + 1] = 5ull + (rand() % 5ull);
 		}
+
+		createRoom(tilemap, { 2, 2 }, { 25, 20 }, {
+			1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,
+		});
 
 		auto prev = std::chrono::high_resolution_clock::now(); 
 		
@@ -277,7 +336,7 @@ int main() {
 	Engine({
 		.renderer = {
 			.windowTitle = "Vulkan Renderer",
-			.resolution = {1600, 900},
+			.resolution = {2560, 1440},
 			.vsyncEnabled = false
 		}
 	}).run();
