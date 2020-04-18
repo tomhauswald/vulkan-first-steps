@@ -68,12 +68,12 @@ bool satisfiesBitMask(Number num, size_t mask) {
 template<typename InputContainer, typename OutElem>
 std::vector<OutElem> mapToVector(
 	InputContainer const& elems, 
-	std::function<OutElem(typename InputContainer::value_type const&)>&& mapping
+	std::function<OutElem(typename InputContainer::value_type const&)> const& mapping
 ) {
 	std::vector<OutElem> result;
 	result.reserve(std::size(elems));
 	std::transform(std::begin(elems), std::end(elems), std::back_inserter(result), mapping);
-	return std::move(result);
+	return result;
 }
 
 // Returns whether the given predicate is true for any item inside
@@ -85,14 +85,23 @@ bool contains(
 	size_t* const outIndex = nullptr
 ) {
 	auto position = std::find_if(std::begin(container), std::end(container), pred);
-	if(position == std::end(container)) {
-		return false;
-	} else {
-		if(outIndex) {
-			*outIndex = std::distance(std::begin(container), position);
-		}
-		return true;
-	}
+	if(position == std::end(container)) return false;
+	if(outIndex) *outIndex = std::distance(std::begin(container), position);
+	return true;
+}
+
+// Returns whether the given value is contained by the container.
+// Optionally stores the found index, as well.
+template<typename Container>
+bool contains(
+	Container const& container,
+	typename Container::value_type const& value,
+	size_t* const outIndex = nullptr
+) {
+	auto position = std::find(std::begin(container), std::end(container), value);
+	if (position == std::end(container)) return false;
+	if (outIndex) *outIndex = std::distance(std::begin(container), position);
+	return true;
 }
 
 // Constructs a vector containing the values [0,...,count).

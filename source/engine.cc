@@ -4,6 +4,7 @@
 #include "camera.h"
 #include "sprite.h"
 #include "tilemap.h"
+#include <unordered_set>
 
 struct EngineSettings {
 	RendererSettings renderer;
@@ -148,114 +149,147 @@ public:
 		return ref;
 	}
 
-	static constexpr auto floorTiles = std::array {
-		30, 30, 30, 30, 30, 30, 30, 30,
-		30, 30, 30, 30, 30, 30, 30, 30,
-		30, 30, 30, 30, 30, 30, 30, 30,
-		32, 32, 32, 32, 38, 38, 38, 38,
-		31, 31, 31, 31, 37, 39, 44, 45
-	};
+	static constexpr size_t floorTile = 30;
+	static constexpr size_t lWallTile = 58;
+	static constexpr size_t rWallTile = 57;
+	static constexpr size_t hWallTile = 9;
+	static constexpr size_t tlCornerTile = 59;
+	static constexpr size_t trCornerTile = 60;
+	static constexpr size_t blCornerTile = 73;
+	static constexpr size_t brCornerTile = 74;
 
-	static constexpr auto wallTopTiles = std::array {
-		2, 3, 4, 75, 76
-	};
-
-	static constexpr size_t wallFrontTile = 10;
-	static constexpr size_t wallLeftTile = 58;
-	static constexpr size_t wallRightTile = 57;
-
-	static constexpr size_t wallTLCornerTopTile = 52;
-	static constexpr size_t wallTLCornerFrontTile = 59;
-
-	static constexpr size_t wallTRCornerTopTile = 53;
-	static constexpr size_t wallTRCornerFrontTile = 60;
-
-	static constexpr size_t wallBLCornerTopTile = 66;
-	static constexpr size_t wallBLCornerFrontTile = 73;
-
-	static constexpr size_t wallBRCornerTopTile = 67;
-	static constexpr size_t wallBRCornerFrontTile = 74;
-
-	void createCornerAboveLeft(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y - 2, 1 }, wallTLCornerTopTile);
-		tilemap.setTileAt({ pos.x, pos.y - 1, 0 }, wallTLCornerFrontTile);
-	}
-
-	void createCornerAboveRight(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y - 2, 1 }, wallTRCornerTopTile);
-		tilemap.setTileAt({ pos.x, pos.y - 1, 0 }, wallTRCornerFrontTile);
-	}
-
-	void createCornerBelowLeft(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallBLCornerTopTile);
-		tilemap.setTileAt({ pos.x, pos.y + 1, 0 }, wallBLCornerFrontTile);
-	}
-
-	void createCornerBelowRight(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallBRCornerTopTile);
-		tilemap.setTileAt({ pos.x, pos.y + 1, 0 }, wallBRCornerFrontTile);
-	}
-
-	void createWallAbove(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y - 2, 1 }, randomPick(wallTopTiles));
-		tilemap.setTileAt({ pos.x, pos.y - 1, 0 }, wallFrontTile);
-	}
-
-	void createWallBelow(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y, 1 }, randomPick(wallTopTiles));
-		tilemap.setTileAt({ pos.x, pos.y + 1, 0 }, wallFrontTile);
-	}
-
-	void createWallToLeft(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallLeftTile);
-	}
-
-	void createWallToRight(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y, 1 }, wallRightTile);
-	}
-
-	void createFloor(Tilemap8& tilemap, glm::u64vec2 const& pos) {
-		tilemap.setTileAt({ pos.x, pos.y, 0 }, randomPick(floorTiles));
-	}
-
-	void createRoom(Tilemap8& tilemap, glm::u64vec2 const& center, glm::u64vec2 const& size, std::vector<bool> const& mask) {
+	void createRoom(Tilemap8& tilemap, glm::u64vec2 const& center, glm::u64vec2 const& size, std::vector<bool> const& floorMask) {
 
 		auto pos = glm::u64vec2{};
+		auto wallMask = std::vector<bool>(floorMask.size(), false);
 
 		for (auto dx : range(size.x)) {
-
-			pos.x = center.x + dx;
-
+			pos.x = center.x - size.x / 2 + dx;
 			for (auto dy : range(size.y)) {
+				pos.y = center.y - size.y / 2 + dy;
 
-				pos.y = center.y + dy;
 				auto index = dx + dy * size.x;
+				if (floorMask[index]) {
 
-				auto canStand     = mask[index];
-				auto canMoveLeft  = (dx > 0          && mask[index - 1]);
-				auto canMoveRight = (dx < size.x - 1 && mask[index + 1]);
-				auto canMoveUp    = (dy > 0          && mask[index - size.x]);
-				auto canMoveDown  = (dy < size.y - 1 && mask[index + size.x]);
+					if (dx > 0 && !floorMask[index - 1]) wallMask[index - 1] = true;
+					if (dx < size.x - 1 && !floorMask[index + 1]) wallMask[index + 1] = true;
+					if (dy > 0 && !floorMask[index - size.x]) wallMask[index - size.x] = true;
+					if (dy < size.y - 1 && !floorMask[index + size.x]) wallMask[index + size.x] = true;
 
-				if (!canStand) continue;
+					if (dx > 0 && dy > 0 && !floorMask[index - 1 - size.x]) wallMask[index - 1 - size.x] = true;
+					if (dx < size.x - 1 && dy > 0 && !floorMask[index + 1 - size.x]) wallMask[index + 1 - size.x] = true;
+					if (dx > 0 && dy < size.y - 1 && !floorMask[index - 1 + size.x]) wallMask[index - 1 + size.x] = true;
+					if (dx < size.x - 1 && dy < size.y - 1 && !floorMask[index + 1 + size.x]) wallMask[index + 1 + size.x] = true;
+
+					tilemap.setTileAt({ pos.x,pos.y,0 }, floorTile);
+				}
+			}
+		}
+
+		std::vector<glm::u64vec2> tlcs = {};
+		std::vector<glm::u64vec2> trcs = {};
+		std::vector<glm::u64vec2> blcs = {};
+		std::vector<glm::u64vec2> brcs = {};
+
+		for (auto dx : range(size.x)) {
+			pos.x = center.x - size.x / 2 + dx;
+			for (auto dy : range(size.y)) {
+				pos.y = center.y - size.y / 2 + dy;
 				
-				createFloor(tilemap, pos);
-
-				if (!canMoveUp) createWallAbove(tilemap, pos);
-
-				if (!canMoveDown) createWallBelow(tilemap, pos);
-
-				if (!canMoveLeft) {
-					if(canMoveUp && canMoveDown) createWallToLeft(tilemap, pos);
-					if (!canMoveUp) createCornerAboveLeft(tilemap, pos);
-					if (!canMoveDown) createCornerBelowLeft(tilemap, pos);
+				auto index = dx + dy * size.x;
+				
+				if (wallMask[index]) {
+					if (dx < size.x - 1 &&
+						dy < size.y - 1 &&
+						wallMask[index + 1] &&
+						wallMask[index + size.x]) {
+						tlcs.push_back(pos);
+						tilemap.setTileAt({ pos.x, pos.y, 0 }, tlCornerTile);
+						tilemap.setTileAt({ pos.x, pos.y - 1, 1 }, tlCornerTile-7);
+					}
+					else if (
+						dx > 0 &&
+						dy < size.y - 1 &&
+						wallMask[index - 1] &&
+						wallMask[index + size.x]) {
+						trcs.push_back(pos);
+						tilemap.setTileAt({ pos.x, pos.y, 0 }, trCornerTile);
+						tilemap.setTileAt({ pos.x, pos.y - 1, 1 }, trCornerTile-7);
+					}
+					else if (
+						dx < size.x - 1 &&
+						dy > 0 &&
+						wallMask[index + 1] &&
+						wallMask[index - size.x]) {
+						blcs.push_back(pos);
+						tilemap.setTileAt({ pos.x, pos.y, 0 }, blCornerTile);
+						tilemap.setTileAt({ pos.x, pos.y - 1, 1 }, blCornerTile-7);
+					}
+					else if (
+						dx > 0 &&
+						dy > 0 &&
+						wallMask[index - 1] &&
+						wallMask[index - size.x]) {
+						brcs.push_back(pos);
+						tilemap.setTileAt({ pos.x, pos.y, 0 }, brCornerTile);
+						tilemap.setTileAt({ pos.x, pos.y-1, 1 }, brCornerTile-7);
+					}
 				}
+			}
+		}
 
-				if (!canMoveRight) {
-					if (canMoveUp && canMoveDown) createWallToRight(tilemap, pos);
-					if (!canMoveUp) createCornerAboveRight(tilemap, pos);
-					if (!canMoveDown) createCornerBelowRight(tilemap, pos);
-				}
+		glm::u64vec3 next;
+		for (auto const& tlc : tlcs) {
+
+			// Place horizontal walls to the right.
+			next = { tlc.x + 1, tlc.y, 0 };
+			while (!tilemap.tileAt(next)) {
+				tilemap.setTileAt(next, hWallTile);
+				tilemap.setTileAt({ next.x, next.y - 1, 1 }, 2);
+				++next.x;
+			}
+
+			// Place left walls downwards.
+			next = { tlc.x, tlc.y + 1, 0 };
+			while (!tilemap.tileAt(next)) {
+				tilemap.setTileAt(next, lWallTile);
+				++next.y;
+			}
+		}
+
+		for (auto const& trc : trcs) {
+			
+			// Place horizontal walls to the left.
+			next = { trc.x - 1, trc.y, 0 };
+			while (!tilemap.tileAt(next)) {
+				tilemap.setTileAt(next, hWallTile);
+				tilemap.setTileAt({ next.x, next.y - 1, 1 }, 2);
+				--next.x;
+			}
+
+			// Place right walls downwards.
+			next = { trc.x, trc.y + 1, 0 };
+			while (!tilemap.tileAt(next)) {
+				tilemap.setTileAt(next, rWallTile);
+				++next.y;
+			}
+		}
+		
+		for (auto const& blc : blcs) {
+
+			// Place horizontal walls to the right.
+			next = { blc.x + 1, blc.y, 0 };
+			while (!tilemap.tileAt(next)) {
+				tilemap.setTileAt(next, hWallTile);
+				tilemap.setTileAt({ next.x, next.y - 1, 1 }, 2);
+				++next.x;
+			}
+
+			// Place left walls upwards.
+			next = { blc.x, blc.y - 1, 0 };
+			while (!tilemap.tileAt(next)) {
+				tilemap.setTileAt(next, rWallTile);
+				--next.y;
 			}
 		}
 	}
@@ -285,27 +319,15 @@ public:
 			columnHeights[i] = columnHeights[i + 1] = 5ull + (rand() % 5ull);
 		}
 
-		createRoom(tilemap, { 2, 2 }, { 25, 20 }, {
-			1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,
-			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,
+		createRoom(tilemap, { 10, 10 }, { 13, 8 }, {
+			0,0,0,0,0,0,0,0,0,0,0,0,0,
+			0,1,1,1,1,0,0,0,1,1,1,1,0,
+			0,1,1,1,1,1,1,1,1,1,1,1,0,
+			0,1,1,1,1,1,0,0,0,1,1,1,0,
+			0,1,1,1,1,1,0,0,0,1,1,1,0,
+			0,0,0,1,1,1,0,0,0,1,1,1,0,
+			0,0,0,1,1,1,1,1,1,1,1,1,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,0
 		});
 
 		auto prev = std::chrono::high_resolution_clock::now(); 
@@ -336,13 +358,9 @@ int main() {
 	Engine({
 		.renderer = {
 			.windowTitle = "Vulkan Renderer",
-			.resolution = {2560, 1440},
+			.resolution = {1600, 900},
 			.vsyncEnabled = false
 		}
 	}).run();
-
-	std::cout << "Press [ENTER] exit application..." << lf;
-	(void) getchar();
-	
 	return 0;
 }
