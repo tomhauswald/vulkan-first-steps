@@ -4,6 +4,7 @@
 #include "tilemap.h"
 
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <chrono>
 #include <unordered_set>
 
@@ -11,9 +12,46 @@ struct EngineSettings {
 	RendererSettings renderer;
 };
 
-struct CubeDemo : public GameObject {
+class Model : public GameObject {
 private:
-	static Mesh const& createCubeMesh(Renderer& r) {
+	Mesh& m_mesh;
+	Texture const& m_texture;
+	glm::vec3 m_position;
+	glm::vec3 m_scale;
+	glm::vec3 m_euler;
+
+public:
+	Model(Mesh& mesh, Texture const& texture) : 
+		m_mesh{ mesh },
+		m_texture{ texture },
+		m_position{ 0, 0, 0 },
+		m_scale{ 1, 1, 1 },
+		m_euler{ 0, 0, 0 } {
+	}
+	
+	void draw(Renderer& r) const override {
+		r.bindTextureSlot(0, m_texture);
+		r.setPushConstants(PCInstanceTransform{
+			glm::translate(m_position) 
+			* glm::scale(m_scale)
+			* glm::eulerAngleYXZ(m_euler.y, m_euler.x, m_euler.z)
+		});
+		r.renderMesh(m_mesh);
+	}
+
+	GETTER(mesh, m_mesh)
+	GETTER(position, m_position)
+	GETTER(scale, m_scale)
+	GETTER(euler, m_euler)
+
+	SETTER(setPosition, m_position)
+	SETTER(setScale, m_scale)
+	SETTER(setEuler, m_euler)
+};
+
+class CubeDemo : public GameObject {
+private:
+	static Mesh& createCubeMesh(Renderer& r) {
 		auto& cube = r.createMesh();
 		cube.setVertices({
 			
@@ -63,38 +101,24 @@ private:
 		return cube;
 	}
 
-	Mesh const& m_mesh;
-	Texture& m_texture;
+	std::unique_ptr<Model> m_pModel;
 
 public:
-	CubeDemo(Renderer& r) : 
-		m_mesh{createCubeMesh(r)},
-		m_texture{r.createTexture()} {
-		m_texture.updatePixelsWithImage("../assets/images/door.png");
+	CubeDemo(Renderer& r) {
+		auto& mesh = createCubeMesh(r);
+		auto& texture = r.createTexture();
+		texture.updatePixelsWithImage("../assets/images/wall.png");
+		m_pModel = std::make_unique<Model>(mesh, texture);
 	} 
 
 	void draw(Renderer& r) const override {
 		
-		r.bindTextureSlot(0, m_texture);
-
 		for (int z = -1; z <= 1; ++z) {
 			for (int y = -1; y <= 1; ++y) {
 				for (int x = -1; x <= 1; ++x) {
-
-					auto modelMatrix = glm::translate(
-						glm::vec3{ x * 3.0f, y * 3.0f, z * 3.0f }
-					);
-
-					if (x || y || z) {
-						modelMatrix = glm::rotate(
-							modelMatrix,
-							lifetime(),
-							{ x, y, z }
-						);
-					}
-
-					r.setPushConstants(PCInstanceTransform{ modelMatrix });
-					r.renderMesh(m_mesh);
+					m_pModel->setPosition({ x * 3.0f, y * 3.0f, z * 3.0f });
+					m_pModel->setEuler({ !!x * lifetime(), !!y * lifetime(), !!z * lifetime() });
+					m_pModel->draw(r);
 				}
 			}
 		}
@@ -156,7 +180,7 @@ public:
 
 	void run3dTest() {
 		m_renderer.initialize(false);
-		//add(std::make_unique<CubeDemo>(m_renderer));
+		add(std::make_unique<CubeDemo>(m_renderer));
 
 		auto cam = m_renderer.camera3d();
 		cam.setPosition({ 0.0f, 0.0f, -10.0f });
