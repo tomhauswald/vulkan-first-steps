@@ -86,26 +86,6 @@ void renderCubes(Renderer& r, Mesh const& cube) {
 	}
 }
 
-struct FPSCounterObj : public GameObject {
-private:
-	size_t m_frames;
-	float m_seconds;
-
-public:
-	FPSCounterObj() : m_frames{}, m_seconds{} { }
-	virtual void update(float dt) override {
-		m_seconds += dt;
-		m_frames++;
-		if(m_seconds >= 1.0f) {
-			std::cout << static_cast<size_t>(m_frames / m_seconds) << lf;
-			m_seconds = 0.0f;
-			m_frames = 0;
-		}
-		GameObject::update(dt);
-	}
-	virtual ~FPSCounterObj() { }
-};
-
 class Engine {
 private:
 	EngineSettings const& m_settings;
@@ -297,8 +277,6 @@ public:
 	void run() {
 
 		m_renderer.initialize(true);
-
-		auto& counter = add(std::make_unique<FPSCounterObj>());
 
 		auto& doorTexture = m_renderer.createTexture();
 		doorTexture.updatePixelsWithImage("../assets/images/door.png");

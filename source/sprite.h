@@ -1,12 +1,30 @@
 #pragma once
 
 #include "game_object.h"
-#include "renderer.h"
+#include "texture.h"
 
-class Sprite : public GameObject, public HwSpriteInfo {
+class Sprite : public GameObject {
+private:
+	glm::vec2 m_position;
+	glm::vec2 m_size;
+	glm::vec4 m_textureArea;
+	glm::vec4 m_color;
+	float m_rotation;
+	uint8_t m_layer;
+	Texture const& m_texture;
+
 public:
+	static constexpr uint8_t numLayers = 4;
+
 	inline Sprite(Texture const& texture) :
-		GameObject{}, HwSpriteInfo(texture) {
+		GameObject{},
+		m_position{},
+		m_size{texture.width(), texture.height()},
+		m_textureArea{ 0,0,1,1 },
+		m_color{ 1,1,1,1 },
+		m_rotation{ 0 },
+		m_layer{ 0 },
+		m_texture{ texture } {
 	}
 	
 	inline virtual ~Sprite() {
@@ -16,9 +34,26 @@ public:
 		GameObject::update(dt);
 	}
 
-	inline virtual void draw(Renderer& r) override {
-		r.renderSprite(*this);
+	virtual void draw(Renderer& r) override;
+	
+	inline void setLayer(uint8_t layer) {
+		crashIf(layer >= numLayers);
+		m_layer = layer;
 	}
+
+	GETTER(position, m_position)
+	GETTER(size, m_size)
+	GETTER(texture, m_texture)
+	GETTER(textureArea, m_textureArea)
+	GETTER(color, m_color)
+	GETTER(rotation, m_rotation)
+	GETTER(layer, m_layer)
+
+	SETTER(setPosition, m_position)
+	SETTER(setSize, m_size)
+	SETTER(setTextureArea, m_textureArea)
+	SETTER(setColor, m_color)
+	SETTER(setRotation, m_rotation)
 };
 
 class KinematicSprite : public Sprite {

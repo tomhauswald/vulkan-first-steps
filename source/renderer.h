@@ -2,8 +2,8 @@
 
 #include "vulkan_context.h"
 #include "mesh.h"
-#include "hw_sprite_info.h"
 #include "camera.h"
+#include "sprite.h"
 
 #include <map>
 #include <glm/gtx/transform.hpp>
@@ -31,12 +31,10 @@ private:
 	std::vector<std::unique_ptr<Texture>> m_textures;
 	
 	Camera2d m_camera2d;
-	std::vector<
-		std::map<
-			Texture const*, 
-			std::vector<HwSpriteInfo const*>
-		>
-	> m_layerSprites;
+	std::array<
+		std::map<Texture const*, std::pair<size_t, std::vector<USpriteBatch>>>,
+		Sprite::numLayers
+	> m_layerSpriteBatches;
 
 	void createWindow();
 
@@ -51,8 +49,7 @@ public:
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
 		m_spriteBatchMesh{ m_vulkanContext },
-		m_camera2d({ m_settings.resolution.x, m_settings.resolution.y }),
-		m_layerSprites(HwSpriteInfo::numLayers) {
+		m_camera2d({ m_settings.resolution.x, m_settings.resolution.y }) {
 	}
 	
 	inline ~Renderer() {
@@ -106,9 +103,22 @@ public:
 		);
 	}
 
-	inline void renderSprite(HwSpriteInfo const& sprite) {
+	inline void renderSprite(Sprite const& sprite) {
 		if (m_camera2d.isWorldRectVisible(sprite.position(), sprite.size())) {
-			m_layerSprites[sprite.layer()][&sprite.texture()].push_back(&sprite);
+			
+			auto& [numSprites, batches] = m_layerSpriteBatches[sprite.layer()][&sprite.texture()];
+			batches.resize(std::ceil((numSprites + 1) / (float)USpriteBatch::size));
+
+			auto& batch = batches.back();
+			auto k = numSprites % USpriteBatch::size;
+
+			batch.bounds[k] = m_camera2d.worldToNdcRect(sprite.position(), sprite.size());
+			batch.textureAreas[k] = sprite.textureArea();
+			batch.colors[k] = sprite.color();
+			batch.trigonometry[k / 2][2 * (k % 2) + 0] = glm::sin(glm::radians(sprite.rotation()));
+			batch.trigonometry[k / 2][2 * (k % 2) + 1] = glm::cos(glm::radians(sprite.rotation()));
+
+			++numSprites;
 		}
 	}
 
