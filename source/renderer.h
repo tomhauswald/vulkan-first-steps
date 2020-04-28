@@ -31,6 +31,8 @@ private:
 	std::vector<std::unique_ptr<Texture>> m_textures;
 	
 	Camera2d m_camera2d;
+	Camera3d m_camera3d;
+
 	std::array<
 		std::map<Texture const*, std::pair<size_t, std::vector<USpriteBatch>>>,
 		Sprite::numLayers
@@ -49,7 +51,8 @@ public:
 		m_unitQuad{ m_vulkanContext },
 		m_viewportQuad{ m_vulkanContext },
 		m_spriteBatchMesh{ m_vulkanContext },
-		m_camera2d({ m_settings.resolution.x, m_settings.resolution.y }) {
+		m_camera2d({ m_settings.resolution.x, m_settings.resolution.y }),
+		m_camera3d{ m_aspectRatio, 45.0f } {
 	}
 	
 	inline ~Renderer() {
@@ -128,6 +131,7 @@ public:
 			return false;
 		}
 		m_vulkanContext.onFrameBegin();
+		setUniforms(UCameraTransform{m_camera3d.transform()});
 		return true;
 	}
 
@@ -137,5 +141,8 @@ public:
 	}
 
 	GETTER(camera2d, m_camera2d)
+	GETTER(camera3d, m_camera3d)
+
 	SETTER(setCamera2d, m_camera2d)
+	SETTER(setCamera3d, m_camera3d)
 };

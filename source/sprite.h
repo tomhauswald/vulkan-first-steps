@@ -34,7 +34,7 @@ public:
 		GameObject::update(dt);
 	}
 
-	virtual void draw(Renderer& r) override;
+	virtual void draw(Renderer& r) const override;
 	
 	inline void setLayer(uint8_t layer) {
 		crashIf(layer >= numLayers);

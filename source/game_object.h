@@ -22,8 +22,7 @@ public:
 		m_lifetime += dt;
 	}
 
-	inline virtual void draw(Renderer& r) {
-	}
+	inline virtual void draw(Renderer& r) const { }
 
 	inline void kill() noexcept {
 		m_alive = false;

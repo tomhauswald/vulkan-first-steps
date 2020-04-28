@@ -19,8 +19,8 @@ layout(push_constant) uniform PushConstantData {
 void main() {
 
 	gl_Position = globals.cameraTransform 
-                * self.modelMatrix 
-		    	* vec4(vertexPosition, 1.0);
+			* self.modelMatrix 
+	    		* vec4(vertexPosition, 1.0);
 	
 	fragmentColor = vec4(vertexColor, 1.0);
 	fragmentUV = vertexUV;

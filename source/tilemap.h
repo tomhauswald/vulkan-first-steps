@@ -79,7 +79,7 @@ public:
 		GameObject::update(dt);
 	}
 
-	inline virtual void draw(Renderer& r) override {
+	inline virtual void draw(Renderer& r) const override {
 		
 		auto minLoc = glm::u64vec3{ r.camera2d().position() / m_dstTileSize, 0 };
 		auto visibleArea = glm::u64vec2{ glm::ceil(r.camera2d().viewportSize() / m_dstTileSize) };
@@ -89,20 +89,21 @@ public:
 			m_size.z - 1
 		};
 
+		auto sprite = m_tileSprite;
 		for (size_t z = minLoc.z; z <= maxLoc.z; ++z) {
 			for (size_t y = minLoc.y; y <= maxLoc.y; ++y) {
 				for (size_t x = minLoc.x; x <= maxLoc.x; ++x) {
 					auto value = tileAt({ x,y,z });
 					if (value) {
-						m_tileSprite.setSize(m_dstTileSize);
-						m_tileSprite.setPosition(m_dstTileSize * glm::vec2{ x, y });
-						m_tileSprite.setTextureArea({
+						sprite.setSize(m_dstTileSize);
+						sprite.setPosition(m_dstTileSize * glm::vec2{ x, y });
+						sprite.setTextureArea({
 							m_uvIncrement.x * ((value - 1) % m_srcTilesPerRow),
 							m_uvIncrement.y * ((value - 1) / m_srcTilesPerRow),
 							m_uvIncrement
 						});
-						m_tileSprite.setLayer(z);
-						r.renderSprite(m_tileSprite);
+						sprite.setLayer(z);
+						r.renderSprite(sprite);
 					}
 				}
 			}
