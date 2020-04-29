@@ -1,6 +1,6 @@
 #include "renderer.h"
 
-void Renderer::initialize(bool mode2d) {	
+void Renderer::initialize() {	
 
 	createWindow();
 
@@ -8,15 +8,15 @@ void Renderer::initialize(bool mode2d) {
 	m_vulkanContext.accomodateWindow(m_pWindow);
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
-	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
+	m_vulkanContext.createSwapchain(m_settings.enableVsync);
 	m_vulkanContext.createDepthBuffer();
 	m_vulkanContext.createPipeline(
-		mode2d ? "vert-sprite" : "vert-textured",
+		m_settings.enable2d ? "vert-sprite" : "vert-textured",
 		"frag-textured",
 		VPositionColorTexcoord::binding(),
 		VPositionColorTexcoord::attributes(),
-		!mode2d,
-		mode2d ? VK_FILTER_NEAREST : VK_FILTER_LINEAR
+		!m_settings.enable2d,
+		m_settings.enable2d ? VK_FILTER_NEAREST : VK_FILTER_LINEAR
 	);
 
 	auto w = m_settings.resolution.x;
@@ -54,35 +54,25 @@ void Renderer::initialize(bool mode2d) {
 }
 
 void Renderer::renderSpriteBatches() {
-	for (auto& layer : m_layerSprites) {
-		for (auto& [pTexture, sprites] : layer) {
+	for (auto const& layer : m_layerSpriteBatches) {
+		for (auto const& [pTexture, mapEntry] : layer) {
+			auto const& [numSprites, batches] = mapEntry;
 
-			bindTextureSlot(0, *pTexture);
-
-			auto numBatches = (size_t)std::ceil(sprites.size() / (float)USpriteBatch::size);
-			auto pBatches = std::make_unique<USpriteBatch[]>(numBatches);
-
-			for (auto spriteIndex : range(sprites.size())) {
-
-				auto batchIndex = spriteIndex / USpriteBatch::size;
-				auto& batch = pBatches[batchIndex];
-				auto const* sprite = sprites[spriteIndex];
-
-				auto k = spriteIndex % USpriteBatch::size;
-				batch.bounds[k] = m_camera2d.worldToNdcRect(sprite->position(), sprite->size());
-				batch.textureAreas[k] = sprite->textureArea();
-				batch.colors[k] = sprite->color();
-				batch.trigonometry[k / 2][2 * (k % 2) + 0] = glm::sin(glm::radians(sprite->rotation()));
-				batch.trigonometry[k / 2][2 * (k % 2) + 1] = glm::cos(glm::radians(sprite->rotation()));
-			}
+			// Clear sprite batch data behind last entry in last batch.
+			auto emptyBytes = (USpriteBatch::size - 1) - (numSprites % USpriteBatch::size);
+			auto where = const_cast<char*>(
+				reinterpret_cast<char const*>(&batches.back()) + sizeof(USpriteBatch) - emptyBytes
+			);
+			memset(where, 0, emptyBytes);
 			
-			for (auto batchIndex : range(numBatches)) {
-				setUniforms(pBatches[batchIndex]);
+			bindTextureSlot(0, *pTexture);
+			for(auto const& batch : batches) {
+				setUniforms(batch);
 				renderMesh(m_spriteBatchMesh);
 			}
-		}
-		layer.clear();
+		}	
 	}
+	m_layerSpriteBatches = {};
 }
 
 void Renderer::createWindow() {

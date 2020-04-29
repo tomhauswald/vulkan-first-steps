@@ -3,6 +3,7 @@
 #include "common.h"
 
 class Renderer;
+class Engine;
 
 class GameObject {
 private:
@@ -10,7 +11,7 @@ private:
 	float m_lifetime;
 
 public:
-	inline GameObject() : 
+	inline GameObject(Engine&) : 
 		m_alive{ true },
 		m_lifetime{ 0.0f } {
 	}
@@ -22,8 +23,7 @@ public:
 		m_lifetime += dt;
 	}
 
-	inline virtual void draw(Renderer& r) {
-	}
+	inline virtual void draw(Renderer& r) const { }
 
 	inline void kill() noexcept {
 		m_alive = false;

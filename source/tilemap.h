@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game_object.h"
+#include "sprite.h"
 
 template<typename TileType>
 class Tilemap : public GameObject {
@@ -13,6 +14,8 @@ private:
 	glm::size_t m_srcTilesPerCol;
 	glm::vec2 m_dstTileSize;
 	glm::vec2 m_uvIncrement;
+
+	Sprite m_tileSprite;
 
 	inline size_t tileIndex(glm::u64vec3 const& pos) const {
 		crashIf(pos.x > m_size.x || pos.y > m_size.y || pos.z > m_size.z);
@@ -35,7 +38,8 @@ public:
 		m_uvIncrement{
 			srcTileSize.x / static_cast<float>(m_tileset.width()),
 			srcTileSize.y / static_cast<float>(m_tileset.height())
-		} {
+		},
+		m_tileSprite{tileset} {
 	}
 
 	inline virtual ~Tilemap() {
@@ -75,10 +79,8 @@ public:
 		GameObject::update(dt);
 	}
 
-	inline virtual void draw(Renderer& r) override {
+	inline virtual void draw(Renderer& r) const override {
 		
-		static std::vector<HwSpriteInfo> sprites;
-
 		auto minLoc = glm::u64vec3{ r.camera2d().position() / m_dstTileSize, 0 };
 		auto visibleArea = glm::u64vec2{ glm::ceil(r.camera2d().viewportSize() / m_dstTileSize) };
 		auto maxLoc = glm::u64vec3{
@@ -87,15 +89,12 @@ public:
 			m_size.z - 1
 		};
 
-		sprites.resize(visibleArea.x * visibleArea.y * m_size.z, { m_tileset });
-		size_t spriteIndex = 0;
-
+		auto sprite = m_tileSprite;
 		for (size_t z = minLoc.z; z <= maxLoc.z; ++z) {
 			for (size_t y = minLoc.y; y <= maxLoc.y; ++y) {
 				for (size_t x = minLoc.x; x <= maxLoc.x; ++x) {
 					auto value = tileAt({ x,y,z });
 					if (value) {
-						auto& sprite = sprites[spriteIndex++];
 						sprite.setSize(m_dstTileSize);
 						sprite.setPosition(m_dstTileSize * glm::vec2{ x, y });
 						sprite.setTextureArea({

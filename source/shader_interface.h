@@ -89,17 +89,12 @@ struct UCameraTransform {
 
 struct USpriteBatch {
 	static constexpr auto size = 292;
-	
-	std::array<glm::vec4, size> bounds;
-	std::array<glm::vec4, size> textureAreas;
-	std::array<glm::vec4, size> colors;
-	std::array<glm::vec4, size / 2> trigonometry;
-
-	inline USpriteBatch() : bounds{}, textureAreas{}, colors{}, trigonometry{} {
-	}
+	glm::vec4 bounds[size];
+	glm::vec4 textureAreas[size];
+	glm::vec4 colors[size];
+	glm::vec4 trigonometry[size / 2];
 };
 
 struct PCInstanceTransform {
 	glm::mat4 modelMatrix;
-	static constexpr auto a = sizeof(USpriteBatch);
 };
