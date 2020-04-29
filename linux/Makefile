@@ -23,7 +23,7 @@ LD        := clang++-10
 LD_FLAGS  := -std=$(CXX_STD) `libpng-config --ldflags` `pkg-config --static --libs glfw3` -lvulkan 
 
 BINARY  := ./bin/$(if $(RELEASE),release,debug).elf
-SOURCES := $(wildcard ../source/*.cc)
+SOURCES := $(wildcard ../source/**/*.cc ../source/*.cc)
 OBJDIR  := ./obj/$(if $(RELEASE),release,debug)
 OBJECTS := $(patsubst ../source/%.cc,$(OBJDIR)/%.o,$(SOURCES))
 

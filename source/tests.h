@@ -1,9 +1,11 @@
+#pragma once
+
 #include "engine.h"
 #include "model.h"
 
-static void makeCube(Mesh& mesh) {
+static std::vector<VPositionColorTexcoord> createCubeVertices(glm::vec3 const& center) {
 	
-	mesh.setVertices({
+	auto vertices = std::vector<VPositionColorTexcoord> {
 			
 		{ {-1, +1, -1}, {1,1,0}, {0,0} },
 		{ {+1, +1, -1}, {1,1,0}, {1,0} },
@@ -11,6 +13,13 @@ static void makeCube(Mesh& mesh) {
 		{ {+1, -1, -1}, {1,1,0}, {1,1} },
 		{ {-1, -1, -1}, {1,1,0}, {0,1} },
 		{ {-1, +1, -1}, {1,1,0}, {0,0} },
+		
+		{ {-1, -1, -1}, {1,0,1}, {0,0} },
+		{ {+1, -1, -1}, {1,0,1}, {1,0} },
+		{ {+1, -1, +1}, {1,0,1}, {1,1} },
+		{ {+1, -1, +1}, {1,0,1}, {1,1} },
+		{ {-1, -1, +1}, {1,0,1}, {0,1} },
+		{ {-1, -1, -1}, {1,0,1}, {0,0} },
 
 		{ {-1, +1, +1}, {0,1,1}, {0,0} },
 		{ {-1, +1, -1}, {0,1,1}, {1,0} },
@@ -39,7 +48,10 @@ static void makeCube(Mesh& mesh) {
 		{ {+1, +1, -1}, {0,1,0}, {1,1} },
 		{ {-1, +1, -1}, {0,1,0}, {0,1} },
 		{ {-1, +1, +1}, {0,1,0}, {0,0} }
-	});
+	};
+
+	for(auto& v : vertices) v.position = center + 0.5f * v.position;
+	return vertices;
 }
 
 void t00_sprites() {
@@ -52,13 +64,12 @@ void t00_sprites() {
 		}
 	});
 	
-	auto& texture = engine.renderer().createTexture();
-	texture.updatePixelsWithImage("../assets/images/wall.png");
+	engine.renderer().createTexture("wall").updatePixelsWithImage("../assets/images/wall.png");
 
 	for(auto i : range(10000)) { (void) i;
-		auto& sprite = engine.add(std::make_unique<Sprite>(texture));
+		auto& sprite = engine.add<Sprite>(engine.renderer().texture("wall"));
 		sprite.setPosition({ rand() % 1600, rand() % 900 });
-		sprite.setSize({ 100 + rand() % 100, 100 + rand() % 100 });
+		sprite.setSize({ 16 + rand() % 64, 16 + rand() % 64 });
 		sprite.setRotation(rand() % 360);
 	}	
 	
@@ -75,33 +86,21 @@ void t01_models() {
 		}
 	});
 
-	auto& texture = engine.renderer().createTexture();
-	texture.updatePixelsWithImage("../assets/images/wall.png");
-	
-	auto& cube = engine.renderer().createMesh();
-	makeCube(cube);
+	engine.renderer().createTexture("wall").updatePixelsWithImage("../assets/images/wall.png");
+	engine.renderer().createMesh("cube").setVertices(createCubeVertices({}));
 	
 	for(int x=-1; x<=1; ++x) {
 		for(int y=-1; y<=1; ++y) {
 			for(int z=-1; z<=1; ++z) {
-				auto& model = engine.add(std::make_unique<Model>(cube, texture));
+				auto& model = engine.add<Model>(
+					engine.renderer().mesh("cube"), 
+					engine.renderer().texture("wall")
+				);
 				model.setPosition(3.0f * glm::vec3{ x, y, z });
 				model.setEuler({x * 180, y * 180, z * 180});
 			}
 		}
 	}
 
-	auto cam = engine.renderer().camera3d();
-	cam.setPosition({ 0.0f, 0.0f, -10.0f });
-	cam.lookAt({ 0.0f, 0.0f, 0.0f });
-	engine.renderer().setCamera3d(cam);
-
 	engine.run();
 }
-
-int main() { 
-	t00_sprites();
-	t01_models();
-	return 0;
-}
-
