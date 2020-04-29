@@ -26,6 +26,7 @@
   <ItemGroup>
     <ClInclude Include="..\source\camera.h" />
     <ClInclude Include="..\source\common.h" />
+    <ClInclude Include="..\source\framerate_counter.h" />
     <ClInclude Include="..\source\game_object.h" />
     <ClInclude Include="..\source\pool.h" />
     <ClInclude Include="..\source\mesh.h" />

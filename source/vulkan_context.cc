@@ -1246,6 +1246,7 @@ void VulkanContext::createPipeline(
 }
 
 void VulkanContext::setPushConstantData(void const* data, uint32_t bytes) {
+	crashIf(bytes > VulkanLimits::maxPushConstantsSize);
 	vkCmdPushConstants(
 		m_swapchainCommandBuffers[m_swapchainImageIndex],
 		m_pipelineLayout,
@@ -1274,6 +1275,9 @@ void VulkanContext::bindTextureSlot(uint8_t slot, VulkanTextureInfo const& txr) 
 
 void VulkanContext::setUniformData(void const* data, uint32_t bytes) {
 
+	// Since we currently only bind one UBO range at the time,
+	// the uniform data for each draw call has to fit inside
+	// one such range. (~16K)
 	crashIf(bytes > VulkanLimits::maxUniformBufferRange);
 
 	VulkanUboInfo* pDestUbo = nullptr;
@@ -1285,6 +1289,7 @@ void VulkanContext::setUniformData(void const* data, uint32_t bytes) {
 		}
 	}
 
+	// Create a new UBO range if neccessary.
 	if(!pDestUbo) pDestUbo = &growUniformBufferSequence();
 
 	auto offset = static_cast<uint32_t>(pDestUbo->bytesUsed);
