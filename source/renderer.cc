@@ -1,6 +1,6 @@
 #include "renderer.h"
 
-void Renderer::initialize(bool mode2d) {	
+void Renderer::initialize() {	
 
 	createWindow();
 
@@ -8,15 +8,15 @@ void Renderer::initialize(bool mode2d) {
 	m_vulkanContext.accomodateWindow(m_pWindow);
 	m_vulkanContext.selectPhysicalDevice();
 	m_vulkanContext.createDevice();
-	m_vulkanContext.createSwapchain(m_settings.vsyncEnabled);
+	m_vulkanContext.createSwapchain(m_settings.enableVsync);
 	m_vulkanContext.createDepthBuffer();
 	m_vulkanContext.createPipeline(
-		mode2d ? "vert-sprite" : "vert-textured",
+		m_settings.enable2d ? "vert-sprite" : "vert-textured",
 		"frag-textured",
 		VPositionColorTexcoord::binding(),
 		VPositionColorTexcoord::attributes(),
-		!mode2d,
-		mode2d ? VK_FILTER_NEAREST : VK_FILTER_LINEAR
+		!m_settings.enable2d,
+		m_settings.enable2d ? VK_FILTER_NEAREST : VK_FILTER_LINEAR
 	);
 
 	auto w = m_settings.resolution.x;

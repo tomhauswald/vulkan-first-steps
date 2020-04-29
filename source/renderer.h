@@ -12,7 +12,8 @@ struct RendererSettings {
 	
 	std::string windowTitle;
 	glm::uvec2 resolution;
-	bool vsyncEnabled;
+	bool enableVsync;
+	bool enable2d;
 };
 
 class Renderer {
@@ -64,7 +65,7 @@ public:
 		glfwTerminate();
 	}
 	
-	void initialize(bool mode2d);
+	void initialize();
 
 	inline Mesh& createMesh() {
 		m_meshes.push_back(std::make_unique<Mesh>(m_vulkanContext));
