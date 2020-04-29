@@ -6,6 +6,7 @@
 #include "sprite.h"
 
 #include <map>
+#include <unordered_map>
 #include <glm/gtx/transform.hpp>
 
 struct RendererSettings {
@@ -28,8 +29,8 @@ private:
 	Mesh m_viewportQuad;
 	Mesh m_spriteBatchMesh;
 
-	std::vector<std::unique_ptr<Mesh>> m_meshes;
-	std::vector<std::unique_ptr<Texture>> m_textures;
+	std::unordered_map<std::string, std::unique_ptr<Mesh>> m_meshes;
+	std::unordered_map<std::string, std::unique_ptr<Texture>> m_textures;
 	
 	Camera2d m_camera2d;
 	Camera3d m_camera3d;
@@ -67,16 +68,20 @@ public:
 	
 	void initialize();
 
-	inline Mesh& createMesh() {
-		m_meshes.push_back(std::make_unique<Mesh>(m_vulkanContext));
-		return *m_meshes.back();
+	inline Mesh& createMesh(std::string const& name) {
+		m_meshes[name] = std::make_unique<Mesh>(m_vulkanContext);
+		return *m_meshes.at(name);
 	}
 
-	inline Texture& createTexture() {
-		m_textures.push_back(std::make_unique<Texture>(m_vulkanContext));
-		return *m_textures.back();
+	inline Mesh& mesh(std::string const& name) { return *m_meshes.at(name); }
+
+	inline Texture& createTexture(std::string const& name) {
+		m_textures[name] = std::make_unique<Texture>(m_vulkanContext);
+		return *m_textures.at(name);
 	}
 
+	inline Texture& texture(std::string const& name) { return *m_textures.at(name); }
+	
 	inline void bindTextureSlot(uint8_t slot, Texture const& txr) {
 		m_vulkanContext.bindTextureSlot(slot, txr.vulkanTexture());
 	}
@@ -141,9 +146,6 @@ public:
 		m_vulkanContext.onFrameEnd();
 	}
 
-	GETTER(camera2d, m_camera2d)
-	GETTER(camera3d, m_camera3d)
-
-	SETTER(setCamera2d, m_camera2d)
-	SETTER(setCamera3d, m_camera3d)
+	inline Camera2d& camera2d() noexcept { return m_camera2d; }
+	inline Camera3d& camera3d() noexcept { return m_camera3d; }
 };
