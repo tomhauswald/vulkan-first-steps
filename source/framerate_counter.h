@@ -5,28 +5,25 @@
 class FramerateCounter : public GameObject {
 private:
 	size_t m_frames;
-	float m_seconds;
-	float m_fps;
+	float m_elapsed;
+	float m_interval;
 
 public:
-	inline FramerateCounter() : 
+	inline FramerateCounter(Engine& e, float interval = 5.0f) :
+		GameObject(e),	
 		m_frames{ 0 },
-		m_seconds{ 0.0f },
-		m_fps{ 60.0f } {
+		m_elapsed{ 0.0f },
+		m_interval{ interval } {
 	}
 	
-	inline virtual void update(float dt) override {
-		m_seconds += dt;
+	inline void update(float dt) override {
+		m_elapsed += dt;
 		m_frames++;
-		if (m_seconds >= 1.0f) {
-			m_fps = m_frames / m_seconds;
-			m_seconds = 0.0f;
+		if (m_elapsed >= m_interval) {
+			std::cout << "[FramerateCounter] " << std::round(m_frames / m_elapsed) << " FPS." << lf;
+			m_elapsed = 0.0f;
 			m_frames = 0;
 		}
 		GameObject::update(dt);
 	}
-
-	GETTER(fps, m_fps);
-
-	virtual ~FramerateCounter() { }
 };

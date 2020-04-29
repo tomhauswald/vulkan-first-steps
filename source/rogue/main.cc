@@ -1,4 +1,6 @@
 #include "../engine.h"
+#include "../framerate_counter.h"
+
 #include "room.h"
 
 #include <glm/gtx/rotate_vector.hpp>
@@ -37,6 +39,7 @@ int main() {
 
 	engine.renderer().createTexture("wall").updatePixelsWithImage("../assets/images/wall.png");
 	
+	engine.add<FramerateCounter>();	
 	engine.add<FirstPersonCtrl>();
 	engine.add<Room>(0);
 	
