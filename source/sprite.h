@@ -16,9 +16,9 @@ private:
 public:
 	static constexpr uint8_t numLayers = 4;
 
-	inline Sprite(Texture const& texture) :
-		GameObject{},
-		m_position{},
+	inline Sprite(Engine& e, Texture const& texture) :
+		GameObject{ e },
+		m_position{ },
 		m_size{texture.width(), texture.height()},
 		m_textureArea{ 0,0,1,1 },
 		m_color{ 1,1,1,1 },
@@ -62,8 +62,8 @@ private:
 	glm::vec2 m_acceleration;
 
 public:
-	inline KinematicSprite(Texture const& texture) :
-		Sprite(texture), m_velocity{}, m_acceleration{} {
+	inline KinematicSprite(Engine& e, Texture const& texture) :
+		Sprite(e, texture), m_velocity{}, m_acceleration{} {
 	}
 
 	inline virtual ~KinematicSprite() {

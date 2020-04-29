@@ -1,3 +1,5 @@
+#pragma once
+
 #include "renderer.h"
 #include <chrono>
 
@@ -22,11 +24,10 @@ public:
 		m_renderer.initialize();
 	}
 
-	template<typename Obj>
-	inline Obj& add(std::unique_ptr<Obj> obj) {
-		auto& ref = *obj;
-		m_objects.push_back(std::move(obj));
-		return ref;
+	template<typename Obj, typename ... Args>
+	inline Obj& add(Args&& ... args) {
+		m_objects.push_back(std::make_unique<Obj>(*this, std::forward<Args>(args)...));
+		return dynamic_cast<Obj&>(*m_objects.back());
 	}
 
 	void run();

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "game_object.h"
 #include "mesh.h"
 #include "texture.h"
@@ -13,7 +15,8 @@ private:
 	glm::vec3 m_euler;
 
 public:
-	inline Model(Mesh& mesh, Texture const& texture) : 
+	inline Model(Engine& e, Mesh& mesh, Texture const& texture) : 
+		GameObject{ e },
 		m_mesh{ mesh },
 		m_texture{ texture },
 		m_position{ 0, 0, 0 },
@@ -31,7 +34,10 @@ public:
 		r.renderMesh(m_mesh);
 	}
 
+	inline Mesh& mesh() noexcept { return m_mesh; }
+
 	GETTER(mesh, m_mesh)
+	GETTER(texture, m_texture)
 	GETTER(position, m_position)
 	GETTER(scale, m_scale)
 	GETTER(euler, m_euler)
