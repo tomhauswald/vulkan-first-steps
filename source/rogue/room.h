@@ -2,7 +2,7 @@
 
 #include "../engine.h"
 #include "../model.h"
-#include "../tests.h"
+#include "../mesh_util.h"
 
 class Room : public Model {
 public:
