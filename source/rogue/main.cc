@@ -7,22 +7,48 @@
 
 class FirstPersonCtrl : public GameObject {
 private:
+	Engine& m_engine;
 	Camera3d& m_cam;
 	glm::vec3 m_eye;
-	float m_yaw;
+	glm::vec3 m_forward;
+	bool m_centerCursor;
 
 public:
 	FirstPersonCtrl(Engine& e) : 
 		GameObject(e),
-       		m_cam(e.renderer().camera3d()),
+       		m_engine(e),
+		m_cam(e.renderer().camera3d()),
        		m_eye(0.0f, 1.5f, 0.0f),
-       		m_yaw(0.0f) {
+       		m_forward(0, 0, 1),
+       		m_centerCursor(true) {
 	}
 	
 	void update(float dt) override {
+		
+		if(m_engine.renderer().keyboard().pressed(GLFW_KEY_SPACE))
+			m_centerCursor = !m_centerCursor;
+
+		m_engine.renderer().mouse().setCursorMode(
+			m_centerCursor 
+			? CursorMode::Centered 
+			: CursorMode::Normal
+		);
+		
+		constexpr auto radPerSec = glm::radians(90.0f);
+		auto rotate = 0.0f;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_A)) rotate -= radPerSec;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_D)) rotate += radPerSec;
+		m_forward = glm::rotateY(m_forward, rotate * dt);
+	       	
+		constexpr auto unitsPerSec = 5.0f;
+		auto move = 0.0f;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_W)) move += unitsPerSec;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_S)) move -= unitsPerSec;
+		m_eye += m_forward * move * dt;
+
 		m_cam.setPosition(m_eye);
-		m_cam.lookAt(m_eye + glm::rotateY(glm::vec3{ 0, 0, 1 }, glm::radians(m_yaw)));
-		m_yaw += dt * 45.0f;
+		m_cam.lookAt(m_eye + m_forward);
+		
 		GameObject::update(dt);
 	}
 };

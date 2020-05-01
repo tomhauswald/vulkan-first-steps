@@ -96,4 +96,7 @@ void Renderer::createWindow() {
 
 	// Window creation must succeed.
 	crashIf(!m_pWindow);
+
+	m_keyboard.listen(m_pWindow);
+	m_mouse.listen(m_pWindow);
 }

@@ -4,6 +4,8 @@
 #include "mesh.h"
 #include "camera.h"
 #include "sprite.h"
+#include "keyboard.h"
+#include "mouse.h"
 
 #include <map>
 #include <unordered_map>
@@ -24,6 +26,9 @@ private:
 
 	GLFWwindow* m_pWindow;
 	VulkanContext m_vulkanContext;
+
+	Keyboard m_keyboard;
+	Mouse m_mouse;
 
 	Mesh m_unitQuad;
 	Mesh m_viewportQuad;
@@ -91,7 +96,10 @@ public:
 	}
 
 	inline void handleWindowEvents() {
+		m_keyboard.resetKeyStates();
+		m_mouse.resetButtonStates();
 		glfwPollEvents();
+		m_mouse.updateCursorPosition();
 	}
 
 	template<typename Uniforms>
@@ -132,11 +140,16 @@ public:
 	}
 
 	inline bool tryBeginFrame() {
+		
+		// Skip frame if window is minimized.
 		if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
 			m_vulkanContext.flush();
 			return false;
 		}
+		
 		m_vulkanContext.onFrameBegin();
+		
+		// Apply camera transform in 3d case.
 		setUniforms(UCameraTransform{m_camera3d.transform()});
 		return true;
 	}
@@ -148,4 +161,7 @@ public:
 
 	inline Camera2d& camera2d() noexcept { return m_camera2d; }
 	inline Camera3d& camera3d() noexcept { return m_camera3d; }
+	inline Mouse& mouse() noexcept { return m_mouse; }
+	
+	GETTER(keyboard, m_keyboard)
 };
