@@ -10,20 +10,22 @@ private:
 	bool m_alive;
 	float m_lifetime;
 
-public:
-	inline GameObject(Engine&) : 
-		m_alive{ true },
-		m_lifetime{ 0.0f } {
-	}
+protected:
+	Engine& m_engine;
 
-	inline virtual ~GameObject() {
-	}
+public:
+	inline GameObject(Engine& e) : 
+		m_alive(true),
+		m_lifetime(0.0f),
+		m_engine(e) {}
+
+	inline virtual ~GameObject() {}
 
 	inline virtual void update(float dt) {
 		m_lifetime += dt;
 	}
 
-	inline virtual void draw(Renderer& r) const { }
+	inline virtual void draw(Renderer& r) const {}
 
 	inline void kill() noexcept {
 		m_alive = false;

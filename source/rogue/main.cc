@@ -7,7 +7,6 @@
 
 class FirstPersonCtrl : public GameObject {
 private:
-	Engine& m_engine;
 	Camera3d& m_cam;
 	glm::vec3 m_eye;
 	glm::vec3 m_forward;
@@ -16,7 +15,6 @@ private:
 public:
 	FirstPersonCtrl(Engine& e) : 
 		GameObject(e),
-       		m_engine(e),
 		m_cam(e.renderer().camera3d()),
        		m_eye(0.0f, 1.5f, 0.0f),
        		m_forward(0, 0, 1),
