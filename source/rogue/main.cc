@@ -4,6 +4,7 @@
 #include "room.h"
 
 #include <glm/gtx/rotate_vector.hpp>
+#include <filesystem>
 
 class FirstPersonCtrl : public GameObject {
 private:
@@ -107,11 +108,14 @@ int main() {
 		}
 	});
 
-	engine.renderer().createTexture("wall").updatePixelsWithImage("../assets/images/wall.png");
+	for (auto const& name : { "stonebrick_mossy", "nether_brick" }) {
+		printf("Loading image '%s'...\n", name);
+		engine.renderer().createTexture(name, "../assets/images/"s + name + ".png");
+	}
 	
 	engine.add<FramerateCounter>();	
 	engine.add<FirstPersonCtrl>();
-	engine.add<Room>(0);
+	engine.add<Room>(0, glm::uvec3{ 0, 0, 0 }, glm::uvec3{ 7, 5, 9 });
 	
 	engine.run();
 	return 0;

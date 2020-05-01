@@ -1206,6 +1206,8 @@ void VulkanContext::createPipeline(
 	samplerInfo.minFilter = textureFilterMode;
 	samplerInfo.magFilter = textureFilterMode;
 	samplerInfo.maxAnisotropy = 1.0f;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	
 	crashIf(VK_SUCCESS != vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sampler));

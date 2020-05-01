@@ -85,6 +85,12 @@ public:
 		return *m_textures.at(name);
 	}
 
+	inline Texture& createTexture(std::string const& name, std::string const& imagePath) {
+		auto& texture = createTexture(name);
+		texture.updatePixelsWithImage(imagePath);
+		return texture;
+	}
+
 	inline Texture& texture(std::string const& name) { return *m_textures.at(name); }
 	
 	inline void bindTextureSlot(uint8_t slot, Texture const& txr) {
