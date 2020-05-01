@@ -8,6 +8,7 @@ CXX_FLAGS := \
 	-Wall -Wextra -Wpedantic -Werror \
 	-Wno-unused-parameter \
 	-Wno-unused-private-field \
+	-Wno-unused-variable \
 	-Wno-c99-extensions \
 	-Wno-deprecated-enum-enum-conversion \
 	`libpng-config --cflags` \

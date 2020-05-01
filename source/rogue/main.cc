@@ -34,15 +34,19 @@ public:
 		
 		constexpr auto radPerSec = glm::radians(90.0f);
 		auto rotate = 0.0f;
-		if(m_engine.renderer().keyboard().down(GLFW_KEY_A)) rotate -= radPerSec;
-		if(m_engine.renderer().keyboard().down(GLFW_KEY_D)) rotate += radPerSec;
+		rotate = radPerSec * m_engine.renderer().mouse().movement().x;
 		m_forward = glm::rotateY(m_forward, rotate * dt);
 	       	
 		constexpr auto unitsPerSec = 5.0f;
-		auto move = 0.0f;
-		if(m_engine.renderer().keyboard().down(GLFW_KEY_W)) move += unitsPerSec;
-		if(m_engine.renderer().keyboard().down(GLFW_KEY_S)) move -= unitsPerSec;
-		m_eye += m_forward * move * dt;
+		auto dir = glm::vec3{};
+		auto right = glm::cross(glm::vec3{ 0, 1, 0 }, m_forward);
+
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_W)) dir += m_forward;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_A)) dir -= right;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_S)) dir -= m_forward;
+		if(m_engine.renderer().keyboard().down(GLFW_KEY_D)) dir += right;
+		
+		if(dir.x != 0.0f || dir.z != 0.0f) m_eye += unitsPerSec * glm::normalize(dir) * dt;
 
 		m_cam.setPosition(m_eye);
 		m_cam.lookAt(m_eye + m_forward);
