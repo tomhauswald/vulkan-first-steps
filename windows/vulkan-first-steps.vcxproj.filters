@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\rogue">
+      <UniqueIdentifier>{8027c8cf-cf9e-41f7-afb1-24274a97901f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\rogue">
+      <UniqueIdentifier>{a9acb15d-b513-4375-83bb-69ca1dd89312}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\source\engine.cc">
@@ -23,6 +29,18 @@
     </ClCompile>
     <ClCompile Include="..\source\vulkan_context.cc">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\mouse.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\keyboard.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\sprite.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\rogue\main.cc">
+      <Filter>Source Files\rogue</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -64,6 +82,27 @@
     </ClInclude>
     <ClInclude Include="..\source\framerate_counter.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\mouse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\keyboard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\tests.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\model.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\mesh_util.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\engine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\rogue\room.h">
+      <Filter>Header Files\rogue</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

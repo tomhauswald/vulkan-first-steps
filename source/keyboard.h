@@ -3,8 +3,9 @@
 #include "vulkan_context.h"
 #include <bitset>
 
+using Key = int; // GLFW_KEY_
+
 class Keyboard {
-using Key = int;
 private:
 	std::bitset<GLFW_KEY_LAST + 1> m_down, m_pressed, m_released;
 	
@@ -18,8 +19,8 @@ public:
 		m_released.reset(); 
 	}
 
-	inline bool down(Key key)     const noexcept { return m_down[key];     }
-	inline bool pressed(Key key)  const noexcept { return m_pressed[key];  }
+	inline bool down(Key key) const noexcept { return m_down[key]; }
+	inline bool pressed(Key key) const noexcept { return m_pressed[key]; }
 	inline bool released(Key key) const noexcept { return m_released[key]; }
 };
 

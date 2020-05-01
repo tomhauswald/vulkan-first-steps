@@ -1,6 +1,6 @@
 #include "mouse.h"
 
-void Mouse::callback(GLFWwindow* window, Button btn, int action, int mods) {
+void Mouse::callback(GLFWwindow* window, MouseButton btn, int action, int mods) {
 	switch(action) {
 	case GLFW_PRESS: 
 		m_down[btn] = true; 
@@ -29,7 +29,7 @@ void Mouse::listen(GLFWwindow* window) {
 		}
 	);
 
-	m_sourceWindow = window;
+	m_pWindow = window;
 }
 
 void Mouse::setCursorMode(CursorMode mode) {
@@ -44,6 +44,6 @@ void Mouse::setCursorMode(CursorMode mode) {
 		glfwEnableRawMotion = glfwRawMouseMotionSupported();
 	}
 	
-	glfwSetInputMode(m_sourceWindow, GLFW_CURSOR, glfwCursorMode);
-	glfwSetInputMode(m_sourceWindow, GLFW_RAW_MOUSE_MOTION, glfwEnableRawMotion);
+	glfwSetInputMode(m_pWindow, GLFW_CURSOR, glfwCursorMode);
+	glfwSetInputMode(m_pWindow, GLFW_RAW_MOUSE_MOTION, glfwEnableRawMotion);
 }

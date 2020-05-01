@@ -24,19 +24,20 @@ public:
 			}
 		};
 
-		for(int x=-walkableRadius; x<=walkableRadius; ++x) {
-			for(int z=-walkableRadius; z<=walkableRadius; ++z) {
-				if(x*x+z*z<=walkableRadius*walkableRadius) {
-					addCubeAt({x, -0.5f, z });
-					addCubeAt({x, wallHeight + 0.5f, z });
-					if(x*x+z*z>(walkableRadius-1)*(walkableRadius-1)) {
-						for(int y=0; y<wallHeight; ++y) {
-							addCubeAt({x, y + 0.5f, z});
+		for (int x = -walkableRadius; x <= walkableRadius; ++x) {
+			for (int z = -walkableRadius; z <= walkableRadius; ++z) {
+				if (x * x + z * z <= walkableRadius * walkableRadius) {
+					addCubeAt({ x, -0.5f, z });
+					addCubeAt({ x, wallHeight + 0.5f, z });
+					if (x * x + z * z > (walkableRadius - 1)* (walkableRadius - 1)) {
+						for (int y = 0; y < wallHeight; ++y) {
+							addCubeAt({ x, y + 0.5f, z });
 						}
 					}
 				}
 			}
 		}
+
 		mesh().setVertices(vertices);
 	}
 };
