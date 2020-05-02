@@ -52,7 +52,7 @@ public:
 		}
 
 		// Control camera with keyboard and mouse.
-		if (m_captureMouse) [[likely]] {
+		if (m_captureMouse) {
 
 			m_pitch = glm::clamp(
 				m_pitch + m_mouse.movement().y * rotateSpeed * dt, 

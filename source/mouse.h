@@ -50,7 +50,7 @@ public:
 		m_position.x = static_cast<float>(x);
 		m_position.y = static_cast<float>(y);
 
-		if (!m_isFirstFrame) [[likely]] m_movement = m_position - prev;
+		if (!m_isFirstFrame) m_movement = m_position - prev;
 		m_isFirstFrame = false;
 	}
 
