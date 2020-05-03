@@ -33,17 +33,17 @@ public:
 		addCubeAt({ 0,size.y - 1,0 }, { size.x, 1, size.z });
 
 		// south wall
-		addCubeAt({ 0,1,0 }, { size.x, size.y - 2, 1 }); // , { 1.0f,1.0f,0.7f });
+		addCubeAt({ 0,1,0 }, { size.x, size.y - 2, 1 }, { 1, 1, 0 });
 
 		// north wall
-		addCubeAt({ 0,1,size.z - 1 }, { (size.x - 3) / 2.0f, size.y - 2, 1 }); // , { 0.7f,0.7f,1.0f });
-		addCubeAt({ size.x - (size.x - 3) / 2.0f,1,size.z - 1 }, { (size.x - 3) / 2.0f, size.y - 2, 1 }); // , { 0.7f,0.7f,1.0f });
+		addCubeAt({ 0,1,size.z - 1 }, { (size.x - 3) / 2.0f, size.y - 2, 1 }, { 0, 0, 1 });
+		addCubeAt({ size.x - (size.x - 3) / 2.0f,1,size.z - 1 }, { (size.x - 3) / 2.0f, size.y - 2, 1 }, { 0, 0, 1 });
 
 		// west wall
-		addCubeAt({ 0,1,1 }, { 1, size.y - 2, size.z - 2 }); // , { 0.7f,1.0f,1.0f });
+		addCubeAt({ 0,1,1 }, { 1, size.y - 2, size.z - 2 },  { 0, 1, 1 });
 
 		// east wall
-		addCubeAt({ size.x - 1,1,1 }, { 1, size.y - 2, size.z - 2 }); // , { 1.0f,0.7f,0.7f });
+		addCubeAt({ size.x - 1,1,1 }, { 1, size.y - 2, size.z - 2 }, { 1, 0, 0 });
 
 		mesh().setVertices(vertices);
 	}
