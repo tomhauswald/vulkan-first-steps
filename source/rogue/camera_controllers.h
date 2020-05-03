@@ -6,11 +6,10 @@
 class CameraController : public GameObject {
 private:
     Camera3d& m_cam;
-    
-protected:
     glm::vec3 m_eye;
     glm::vec3 m_target;
     
+protected:
     Keyboard const& m_kb;
 	Mouse& m_mouse;
 	bool m_captureMouse;
@@ -46,6 +45,12 @@ public:
     }
 
     virtual ~CameraController() {}
+
+    GETTER(eye, m_eye)
+    GETTER(target, m_target)
+
+    SETTER(setEye, m_eye)
+    SETTER(setTarget, m_target)
 };
 
 class FirstPersonController : public CameraController {
@@ -61,7 +66,7 @@ private:
 	float m_rotateSpeed;
 
 public:
-	FirstPersonController(Engine& e, float moveSpeed = 4.0f, float sprintSpeed = 8.0f, float rotateSpeed = 60.0f) : 
+	FirstPersonController(Engine& e, float moveSpeed, float sprintSpeed, float rotateSpeed) : 
 		CameraController(e),
         m_pitch(0),
         m_yaw(0),
@@ -70,7 +75,6 @@ public:
         m_moveSpeed(moveSpeed),
         m_sprintSpeed(sprintSpeed),
         m_rotateSpeed(rotateSpeed) {
-
 	}
 	
 	void update(float dt) override {
@@ -103,16 +107,16 @@ public:
 			m_sprinting = m_moving && m_kb.down(GLFW_KEY_LEFT_SHIFT);
 
 			if(m_moving) {
-				m_eye += glm::normalize(dir) * (m_sprinting ? m_sprintSpeed : m_moveSpeed) * dt;
+				setEye(eye() + glm::normalize(dir) * (m_sprinting ? m_sprintSpeed : m_moveSpeed) * dt);
 			}
 
-            m_target = m_eye + forward;
+            setTarget(eye() + forward);
 		}
 		
         if (m_kb.pressed(GLFW_KEY_PERIOD)) {
             printf(
                 "X: %0.1f Y: %0.1f Z: %0.1f Pitch: %0.1f Yaw: %0.1f\n", 
-                m_eye.x, m_eye.y, m_eye.z, m_pitch, m_yaw
+                eye().x, eye().y, eye().z, m_pitch, m_yaw
             );
         }
 
@@ -193,14 +197,14 @@ public:
             m_targetModel.setEuler({ 0.0f, glm::radians(m_yaw), 0.0f });
 
             // Update camera orientation.
-            m_target = m_targetModel.position() + glm::vec3{ 0.0f, m_yOffset, 0.0f };
-            m_eye = m_target - m_distance * forward;
+            setTarget(m_targetModel.position() + glm::vec3{ 0.0f, m_yOffset, 0.0f });
+            setEye(target() - m_distance * forward);
         }
 		
         if (m_kb.pressed(GLFW_KEY_PERIOD)) {
             printf(
                 "X: %0.1f Y: %0.1f Z: %0.1f Pitch: %0.1f Yaw: %0.1f\n", 
-                m_eye.x, m_eye.y, m_eye.z, m_pitch, m_yaw
+                eye().x, eye().y, eye().z, m_pitch, m_yaw
             );
         }
         
