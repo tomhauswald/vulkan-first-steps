@@ -187,8 +187,8 @@ class Renderer2d : public Renderer {
     VulkanPipelineSettings ps;
     ps.vertexInputAttribs = VPositionColorTexcoord::attributes();
     ps.vertexInputBinding = VPositionColorTexcoord::binding();
-    ps.vertexShaderPath = "../assets/shaders/vert-sprite.spv";
-    ps.fragmentShaderPath = "../assets/shaders/frag-textured.spv";
+    ps.vertexShaderPath = "../assets/shaders/spirv/vert-sprite.spv";
+    ps.fragmentShaderPath = "../assets/shaders/spirv/frag-textured.spv";
     ps.textureFilterMode = VK_FILTER_NEAREST;
     ps.enableDepthTest = false;
 
@@ -217,8 +217,8 @@ class Renderer3d : public Renderer {
     VulkanPipelineSettings ps;
     ps.vertexInputAttribs = VPositionColorTexcoord::attributes();
     ps.vertexInputBinding = VPositionColorTexcoord::binding();
-    ps.vertexShaderPath = "../assets/shaders/vert-textured.spv";
-    ps.fragmentShaderPath = "../assets/shaders/frag-textured.spv";
+    ps.vertexShaderPath = "../assets/shaders/spirv/vert-textured.spv";
+    ps.fragmentShaderPath = "../assets/shaders/spirv/frag-textured.spv";
     ps.textureFilterMode = VK_FILTER_LINEAR;
     ps.enableDepthTest = true;
 

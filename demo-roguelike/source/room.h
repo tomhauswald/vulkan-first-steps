@@ -128,4 +128,8 @@ class Room : public GameObject3d {
     m_model.mesh().setVertices(vertices);
     m_model.setPosition(m_origin);
   }
+
+  void draw(Renderer3d& r) const override {
+    r.renderModel(m_model);
+  }
 };

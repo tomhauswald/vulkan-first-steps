@@ -7,7 +7,7 @@
 
 int main() {
   auto engine = Engine3d({.renderer = {.windowTitle = "Rogue",
-                                       .resolution = {1920, 1030},
+                                       .resolution = {1280, 768},
                                        .enableVsync = true}});
 
   for (auto const& name : {"stonebrick_mossy", "nether_brick"}) {
