@@ -1,14 +1,16 @@
 #include "renderer.h"
-#include <glm/gtx/euler_angles.hpp>
-#include <string>
+
 #include <vulkan/vulkan_core.h>
 
-inline void renderMesh(VulkanContext &ctx, Mesh const &mesh) {
+#include <glm/gtx/euler_angles.hpp>
+#include <string>
+
+inline void renderMesh(VulkanContext& ctx, Mesh const& mesh) {
   ctx.draw(mesh.vulkanVertexBuffer().buffer, mesh.vulkanIndexBuffer().buffer,
            static_cast<uint32_t>(mesh.vertices().size()));
 }
 
-void Renderer3d::renderModel(Model const &model) {
+void Renderer3d::renderModel(Model const& model) {
   bindTextureSlot(0, model.texture());
   setPushConstants(PCInstanceTransform{
       glm::translate(model.position()) * glm::scale(model.scale()) *
@@ -16,8 +18,7 @@ void Renderer3d::renderModel(Model const &model) {
   renderMesh(m_vulkanContext, model.mesh());
 }
 
-void Renderer::materialize(VulkanPipelineSettings const &pipelineSettings) {
-
+void Renderer::materialize(VulkanPipelineSettings const& pipelineSettings) {
   createWindow();
 
   m_vulkanContext.createInstance();
@@ -32,20 +33,20 @@ void Renderer::materialize(VulkanPipelineSettings const &pipelineSettings) {
 }
 
 void Renderer2d::renderSpriteBatches() {
-  for (auto const &layer : m_layerSpriteBatches) {
-    for (auto const &[pTexture, mapEntry] : layer) {
-      auto const &[numSprites, batches] = mapEntry;
+  for (auto const& layer : m_layerSpriteBatches) {
+    for (auto const& [pTexture, mapEntry] : layer) {
+      auto const& [numSprites, batches] = mapEntry;
 
       // Clear sprite batch data behind last entry in last batch.
       auto emptyBytes =
           (USpriteBatch::size - 1) - (numSprites % USpriteBatch::size);
       auto where =
-          const_cast<char *>(reinterpret_cast<char const *>(&batches.back()) +
-                             sizeof(USpriteBatch) - emptyBytes);
+          const_cast<char*>(reinterpret_cast<char const*>(&batches.back()) +
+                            sizeof(USpriteBatch) - emptyBytes);
       memset(where, 0, emptyBytes);
 
       bindTextureSlot(0, *pTexture);
-      for (auto const &batch : batches) {
+      for (auto const& batch : batches) {
         setUniforms(batch);
         renderMesh(m_vulkanContext, m_spriteBatchMesh);
       }
@@ -57,7 +58,6 @@ void Renderer2d::renderSpriteBatches() {
 }
 
 void Renderer::createWindow() {
-
   // Initialize GLFW.
   crashIf(!glfwInit());
 

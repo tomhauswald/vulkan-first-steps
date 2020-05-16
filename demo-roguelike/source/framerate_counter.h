@@ -3,13 +3,13 @@
 #include <engine.h>
 
 class FramerateCounter : public GameObject3d {
-private:
+ private:
   size_t m_frames = 0;
   float m_elapsed = 0;
   float m_interval;
 
-public:
-  inline FramerateCounter(Engine3d &e, float interval = 5.0f)
+ public:
+  inline FramerateCounter(Engine3d& e, float interval = 5.0f)
       : GameObject3d(e), m_interval(interval) {}
 
   inline void update(float dt) override {

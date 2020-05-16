@@ -3,19 +3,19 @@
 #include "texture.h"
 
 class Sprite {
-private:
+ private:
   glm::vec2 m_position = {0, 0};
   glm::vec2 m_size;
   glm::vec4 m_textureArea = {0, 0, 1, 1};
   glm::vec4 m_color = {1, 1, 1, 1};
   float m_rotation = 0;
   uint8_t m_layer = 0;
-  Texture *m_pTexture;
+  Texture* m_pTexture;
 
-public:
+ public:
   static constexpr uint8_t numLayers = 4;
 
-  inline Sprite(Texture &texture)
+  inline Sprite(Texture& texture)
       : m_size(texture.width(), texture.height()), m_pTexture(&texture) {}
 
   inline void setLayer(uint8_t layer) {
@@ -37,7 +37,7 @@ public:
   SETTER(setColor, m_color)
   SETTER(setRotation, m_rotation)
 
-  inline void setTexture(Texture &texture) { m_pTexture = &texture; }
+  inline void setTexture(Texture& texture) { m_pTexture = &texture; }
 };
 
 /*class KinematicSprite : public Sprite {

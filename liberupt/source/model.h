@@ -4,20 +4,20 @@
 #include "texture.h"
 
 class Model {
-private:
-  Mesh *m_pMesh;
-  Texture *m_pTexture;
+ private:
+  Mesh* m_pMesh;
+  Texture* m_pTexture;
   glm::vec3 m_position = {0, 0, 0};
   glm::vec3 m_scale = {1, 1, 1};
   glm::vec3 m_euler = {0, 0, 0};
 
-public:
-  inline Model(Mesh &mesh, Texture &texture)
+ public:
+  inline Model(Mesh& mesh, Texture& texture)
       : m_pMesh(&mesh), m_pTexture(&texture) {}
 
-  inline Mesh &mesh() noexcept { return *m_pMesh; }
-  inline void setTexture(Texture &texture) noexcept { m_pTexture = &texture; }
-  inline void setMesh(Mesh &mesh) noexcept { m_pMesh = &mesh; }
+  inline Mesh& mesh() noexcept { return *m_pMesh; }
+  inline void setTexture(Texture& texture) noexcept { m_pTexture = &texture; }
+  inline void setMesh(Mesh& mesh) noexcept { m_pMesh = &mesh; }
 
   GETTER(mesh, *m_pMesh)
   GETTER(texture, *m_pTexture)

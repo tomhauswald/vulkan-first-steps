@@ -1,5 +1,11 @@
 #pragma once
 
+#include <vulkan/vulkan_core.h>
+
+#include <glm/gtx/transform.hpp>
+#include <map>
+#include <unordered_map>
+
 #include "camera.h"
 #include "keyboard.h"
 #include "mesh.h"
@@ -8,11 +14,6 @@
 #include "shader_interface.h"
 #include "sprite.h"
 
-#include <glm/gtx/transform.hpp>
-#include <map>
-#include <unordered_map>
-#include <vulkan/vulkan_core.h>
-
 struct RendererSettings {
   std::string windowTitle;
   glm::uvec2 resolution;
@@ -20,7 +21,7 @@ struct RendererSettings {
 };
 
 class Renderer {
-private:
+ private:
   Keyboard m_keyboard;
   Mouse m_mouse;
 
@@ -28,23 +29,24 @@ private:
 
   void createWindow();
 
-protected:
+ protected:
   RendererSettings m_settings;
   float m_aspectRatio;
 
-  GLFWwindow *m_pWindow;
+  GLFWwindow* m_pWindow;
   VulkanContext m_vulkanContext;
 
   virtual void onFrameBegin() = 0;
   virtual void onFrameEnd() = 0;
 
-  void materialize(VulkanPipelineSettings const &pipelineSettings);
+  void materialize(VulkanPipelineSettings const& pipelineSettings);
 
-public:
+ public:
   inline Renderer(RendererSettings settings)
       : m_settings(std::move(settings)),
         m_aspectRatio(settings.resolution.x / (float)settings.resolution.y),
-        m_pWindow(nullptr), m_vulkanContext() {}
+        m_pWindow(nullptr),
+        m_vulkanContext() {}
 
   inline ~Renderer() {
     m_vulkanContext.flush();
@@ -55,23 +57,23 @@ public:
     glfwTerminate();
   }
 
-  inline Texture &createTexture(std::string const &name) {
+  inline Texture& createTexture(std::string const& name) {
     m_textures[name] = std::make_unique<Texture>(m_vulkanContext);
     return *m_textures.at(name);
   }
 
-  inline Texture &createTexture(std::string const &name,
-                                std::string const &imagePath) {
-    auto &texture = createTexture(name);
+  inline Texture& createTexture(std::string const& name,
+                                std::string const& imagePath) {
+    auto& texture = createTexture(name);
     texture.updatePixelsWithImage(imagePath);
     return texture;
   }
 
-  inline Texture &texture(std::string const &name) {
+  inline Texture& texture(std::string const& name) {
     return *m_textures.at(name);
   }
 
-  inline void bindTextureSlot(uint8_t slot, Texture const &txr) {
+  inline void bindTextureSlot(uint8_t slot, Texture const& txr) {
     m_vulkanContext.bindTextureSlot(slot, txr.vulkanTexture());
   }
 
@@ -86,17 +88,17 @@ public:
     m_mouse.updateCursorPosition();
   }
 
-  template <typename Uniforms> void setUniforms(Uniforms const &uniforms) {
+  template <typename Uniforms>
+  void setUniforms(Uniforms const& uniforms) {
     m_vulkanContext.setUniformData(&uniforms, sizeof(Uniforms));
   }
 
   template <typename PushConstants>
-  void setPushConstants(PushConstants const &pushConsts) {
+  void setPushConstants(PushConstants const& pushConsts) {
     m_vulkanContext.setPushConstantData(&pushConsts, sizeof(PushConstants));
   }
 
   inline bool tryBeginFrame() {
-
     // Skip frame if window is minimized.
     if (glfwGetWindowAttrib(m_pWindow, GLFW_ICONIFIED)) {
       m_vulkanContext.flush();
@@ -113,19 +115,19 @@ public:
     m_vulkanContext.onFrameEnd();
   }
 
-  inline Mouse &mouse() noexcept { return m_mouse; }
+  inline Mouse& mouse() noexcept { return m_mouse; }
 
   GETTER(keyboard, m_keyboard)
   GETTER(settings, m_settings)
 };
 
 class Renderer2d : public Renderer {
-private:
+ private:
   Camera2d m_camera2d;
   Mesh m_spriteBatchMesh;
 
   std::array<
-      std::map<Texture const *, std::pair<size_t, std::vector<USpriteBatch>>>,
+      std::map<Texture const*, std::pair<size_t, std::vector<USpriteBatch>>>,
       Sprite::numLayers>
       m_layerSpriteBatches;
 
@@ -134,12 +136,11 @@ private:
   void onFrameBegin() override {}
   void onFrameEnd() override { renderSpriteBatches(); }
 
-public:
+ public:
   inline Renderer2d(RendererSettings settings)
       : Renderer(std::move(settings)),
         m_camera2d({m_settings.resolution.x, m_settings.resolution.y}),
         m_spriteBatchMesh(m_vulkanContext) {
-
     const VPositionColorTexcoord unitQuadVertices[6] = {
         {{0, 0, 0}, {1, 1, 1}, {0, 0}}, {{1, 0, 0}, {1, 1, 1}, {1, 0}},
         {{1, 1, 0}, {1, 1, 1}, {1, 1}}, {{1, 1, 0}, {1, 1, 1}, {1, 1}},
@@ -155,14 +156,13 @@ public:
     m_spriteBatchMesh.setVertices(std::move(spriteBatchVertices));
   }
 
-  inline void renderSprite(Sprite const &sprite) {
+  inline void renderSprite(Sprite const& sprite) {
     if (m_camera2d.isWorldRectVisible(sprite.position(), sprite.size())) {
-
-      auto &[numSprites, batches] =
+      auto& [numSprites, batches] =
           m_layerSpriteBatches[sprite.layer()][&sprite.texture()];
       batches.resize(std::ceil((numSprites + 1) / (float)USpriteBatch::size));
 
-      auto &batch = batches.back();
+      auto& batch = batches.back();
       auto k = numSprites % USpriteBatch::size;
 
       batch.bounds[k] =
@@ -190,11 +190,11 @@ public:
     Renderer::materialize(ps);
   }
 
-  inline Camera2d &camera2d() noexcept { return m_camera2d; }
+  inline Camera2d& camera2d() noexcept { return m_camera2d; }
 };
 
 class Renderer3d : public Renderer {
-private:
+ private:
   Camera3d m_camera3d;
 
   std::unordered_map<std::string, std::unique_ptr<Mesh>> m_meshes;
@@ -204,7 +204,7 @@ private:
   }
   void onFrameEnd() override {}
 
-public:
+ public:
   inline Renderer3d(RendererSettings settings)
       : Renderer(std::move(settings)), m_camera3d(m_aspectRatio, 45.0f) {}
 
@@ -220,14 +220,14 @@ public:
     Renderer::materialize(ps);
   }
 
-  void renderModel(Model const &model);
+  void renderModel(Model const& model);
 
-  inline Camera3d &camera3d() noexcept { return m_camera3d; }
+  inline Camera3d& camera3d() noexcept { return m_camera3d; }
 
-  inline Mesh &createMesh(std::string const &name) {
+  inline Mesh& createMesh(std::string const& name) {
     m_meshes[name] = std::make_unique<Mesh>(m_vulkanContext);
     return *m_meshes.at(name);
   }
 
-  inline Mesh &mesh(std::string const &name) { return *m_meshes.at(name); }
+  inline Mesh& mesh(std::string const& name) { return *m_meshes.at(name); }
 };

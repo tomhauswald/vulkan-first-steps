@@ -1,29 +1,35 @@
 #pragma once
 
-#include "game_object.h"
-#include <chrono>
 #include <renderer.h>
+
+#include <chrono>
+
+#include "game_object.h"
 
 struct EngineSettings {
   RendererSettings renderer;
 };
 
-template <typename RendererType> class Engine {
-public:
+template <typename RendererType>
+class Engine {
+ public:
   using renderer_type = RendererType;
   using game_object_type = GameObject<Engine<RendererType>>;
 
-  inline Engine(EngineSettings const &settings)
-      : m_settings{settings}, m_renderer{settings.renderer}, m_objects{},
+  inline Engine(EngineSettings const& settings)
+      : m_settings{settings},
+        m_renderer{settings.renderer},
+        m_objects{},
         m_totalTime{} {
     srand(time(nullptr));
     m_renderer.materialize();
   }
 
-  template <typename Obj, typename... Args> inline Obj &add(Args &&... args) {
+  template <typename Obj, typename... Args>
+  inline Obj& add(Args&&... args) {
     m_objects.push_back(
         std::make_unique<Obj>(*this, std::forward<Args>(args)...));
-    return dynamic_cast<Obj &>(*m_objects.back());
+    return dynamic_cast<Obj&>(*m_objects.back());
   }
 
   void run() {
@@ -38,10 +44,10 @@ public:
       prev = now;
 
       std::remove_if(m_objects.begin(), m_objects.end(),
-                     [](auto const &pObj) { return !pObj->alive(); });
+                     [](auto const& pObj) { return !pObj->alive(); });
 
       if (m_renderer.tryBeginFrame()) {
-        for (auto &object : m_objects) {
+        for (auto& object : m_objects) {
           object->update(dt);
           object->draw(m_renderer);
         }
@@ -51,13 +57,13 @@ public:
     }
   }
 
-  inline renderer_type &renderer() noexcept { return m_renderer; }
+  inline renderer_type& renderer() noexcept { return m_renderer; }
 
   GETTER(settings, m_settings)
   GETTER(objects, m_objects)
   GETTER(totalTime, m_totalTime)
 
-private:
+ private:
   EngineSettings m_settings;
   renderer_type m_renderer;
   std::vector<std::unique_ptr<game_object_type>> m_objects;

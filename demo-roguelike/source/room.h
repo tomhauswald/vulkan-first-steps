@@ -7,30 +7,31 @@
 enum Dir { North = 1, East = 2, South = 4, West = 8 };
 
 class Room : public GameObject3d {
-private:
+ private:
   size_t m_index;
   glm::vec3 m_origin;
   glm::vec3 m_size;
   Model m_model;
 
-public:
+ public:
   static constexpr auto wallThickness = 0.1f;
   static constexpr auto doorWidth = 3.0f;
   static constexpr auto doorHeight = 3.0f;
 
-  Room(Engine3d &e, size_t index, glm::vec3 origin, glm::vec3 size, Dir doors)
-      : GameObject3d(e), m_index(index), m_origin(std::move(origin)),
+  Room(Engine3d& e, size_t index, glm::vec3 origin, glm::vec3 size, Dir doors)
+      : GameObject3d(e),
+        m_index(index),
+        m_origin(std::move(origin)),
         m_size(std::move(size)),
         m_model(e.renderer().createMesh("room" + std::to_string(index)),
                 e.renderer().texture("stonebrick_mossy")) {
-
     auto vertices = std::vector<VPositionColorTexcoord>{};
 
-    const auto addCubeAt = [&vertices](glm::vec3 const &pos,
-                                       glm::vec3 const &size,
-                                       glm::vec3 const &col = {1, 1, 1}) {
+    const auto addCubeAt = [&vertices](glm::vec3 const& pos,
+                                       glm::vec3 const& size,
+                                       glm::vec3 const& col = {1, 1, 1}) {
       if (size.x > 0 && size.y > 0 && size.z > 0) {
-        for (auto const &v : cubeVertices(pos + size / 2.0f, size, col, size)) {
+        for (auto const& v : cubeVertices(pos + size / 2.0f, size, col, size)) {
           vertices.push_back(v);
         }
       }
