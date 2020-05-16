@@ -1,19 +1,16 @@
-#include "../engine.h"
-#include "../framerate_counter.h"
+#include <engine.h>
 
+#include "framerate_counter.h"
 #include "room.h"
 #include "player.h"
 #include "camera_controllers.h"
 
-#include <filesystem>
-
 int main() {
-	auto engine = Engine({
+	auto engine = Engine3d({
 		.renderer = {
 			.windowTitle = "Rogue",
 			.resolution = {1920, 1030},
-			.enableVsync = true,
-			.enable2d = false
+			.enableVsync = true
 		}
 	});
 
@@ -31,7 +28,7 @@ int main() {
     constexpr auto corrL = 12.0f;
 
     size_t roomIndex = 0;
-	engine.add<Room>(roomIndex++, 
+  	engine.add<Room>(roomIndex++, 
             glm::vec3{ 0, 0, 0 }, 
             glm::vec3{ hubW, hubH, hubW }, 
             static_cast<Dir>(Dir::North | Dir::East | Dir::South | Dir::West));

@@ -2,6 +2,7 @@
 #include "mesh.h"
 
 #include <fstream>
+#include <vulkan/vulkan_core.h>
 
 constexpr auto validateReleaseBuild = false;
 constexpr auto validate = debug || validateReleaseBuild;
@@ -408,12 +409,8 @@ void VulkanContext::createDepthBuffer() {
 	));
 }
 
-VkShaderModule const& VulkanContext::loadShader(std::string const& name) {
+VkShaderModule const& VulkanContext::loadShader(std::string const& path) {
 
-	constexpr auto shaderBasePath = "../assets/shaders/spirv/";
-	constexpr auto shaderExt = ".spv";
-
-	auto path = shaderBasePath + name + shaderExt;
 	std::cout << "Loading shader from path: " << path << lf;
 
 	std::ifstream fs(path, std::ios::binary);
@@ -428,14 +425,15 @@ VkShaderModule const& VulkanContext::loadShader(std::string const& name) {
 	createInfo.codeSize = code.size();
 	createInfo.pCode = reinterpret_cast<uint32_t const*>(code.c_str());
 
+  m_shaders.push_back({});
 	crashIf(VK_SUCCESS != vkCreateShaderModule(
 		m_device, 
 		&createInfo, 
 		nullptr, 
-		&m_shaders[name]
+		&m_shaders.back()
 	));
 
-	return m_shaders.at(name);
+	return m_shaders.back();
 }
 
 void VulkanContext::accomodateWindow(GLFWwindow* window) {
@@ -902,16 +900,9 @@ VulkanBufferInfo VulkanContext::uploadToDevice(VulkanBufferInfo hostBufferInfo) 
 	return deviceBufferInfo;
 }
 
-void VulkanContext::createPipeline(
-	std::string const& vertexShaderName,
-	std::string const& fragmentShaderName,
-	VkVertexInputBindingDescription const& binding,
-	std::vector<VkVertexInputAttributeDescription> const& attributes,
-	bool enableDepthTest,
-	VkFilter textureFilterMode
-) {
-	m_vertexBinding = binding;
-	m_vertexAttributes = attributes;
+void VulkanContext::createPipeline(VulkanPipelineSettings const& settings) {
+	m_vertexBinding = settings.vertexInputBinding;
+	m_vertexAttributes = settings.vertexInputAttribs;
 
 	auto colorAttachment = VkAttachmentDescription{};
 	colorAttachment.format = VK_FORMAT_B8G8R8A8_SRGB;
@@ -943,7 +934,7 @@ void VulkanContext::createPipeline(
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentReference;
-	subpass.pDepthStencilAttachment = enableDepthTest ? &depthAttachmentReference : nullptr;
+	subpass.pDepthStencilAttachment = settings.enableDepthTest ? &depthAttachmentReference : nullptr;
 
 	auto dependency = VkSubpassDependency{};
 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -954,7 +945,7 @@ void VulkanContext::createPipeline(
 	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
 	auto attachments = std::vector{ colorAttachment };
-	if(enableDepthTest) attachments.push_back(depthAttachment);
+	if(settings.enableDepthTest) attachments.push_back(depthAttachment);
 
 	auto renderPassInfo = VkRenderPassCreateInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -980,7 +971,7 @@ void VulkanContext::createPipeline(
 		[&](auto const& view) {
 
 			auto attachments = std::vector{ view };
-			if (enableDepthTest) attachments.push_back(std::get<VkImageView>(m_depthBuffer));
+			if (settings.enableDepthTest) attachments.push_back(std::get<VkImageView>(m_depthBuffer));
 
 			auto framebufferInfo = VkFramebufferCreateInfo{};
 			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1004,10 +995,10 @@ void VulkanContext::createPipeline(
 
 	auto vertexInput = VkPipelineVertexInputStateCreateInfo{};
 	vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInput.vertexAttributeDescriptionCount = attributes.size();
-	vertexInput.pVertexAttributeDescriptions = attributes.data();
+	vertexInput.vertexAttributeDescriptionCount = m_vertexAttributes.size();
+	vertexInput.pVertexAttributeDescriptions = m_vertexAttributes.data();
 	vertexInput.vertexBindingDescriptionCount = 1;
-	vertexInput.pVertexBindingDescriptions = &binding;
+	vertexInput.pVertexBindingDescriptions = &m_vertexBinding;
 
 	auto inputAssembly = VkPipelineInputAssemblyStateCreateInfo{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1128,20 +1119,17 @@ void VulkanContext::createPipeline(
 	msaaState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	msaaState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	if (!m_shaders.count(vertexShaderName)) loadShader(vertexShaderName);
-	if (!m_shaders.count(fragmentShaderName)) loadShader(fragmentShaderName);
-
 	auto stages = std::array{
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = m_shaders[vertexShaderName],
+			.module = loadShader(settings.vertexShaderPath),
 			.pName = "main",
 		},
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = m_shaders[fragmentShaderName],
+			.module = loadShader(settings.fragmentShaderPath),
 			.pName = "main",
 		}
 	};
@@ -1159,7 +1147,7 @@ void VulkanContext::createPipeline(
 	pipelineInfo.pRasterizationState = &rasterState;
 	pipelineInfo.pColorBlendState = &blendState;
 	pipelineInfo.pMultisampleState = &msaaState;
-	pipelineInfo.pDepthStencilState = enableDepthTest ? &depthStencilState : nullptr;
+	pipelineInfo.pDepthStencilState = settings.enableDepthTest ? &depthStencilState : nullptr;
 
 	crashIf(VK_SUCCESS != vkCreateGraphicsPipelines(
 		m_device,
@@ -1203,8 +1191,8 @@ void VulkanContext::createPipeline(
 
 	auto samplerInfo = VkSamplerCreateInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.minFilter = textureFilterMode;
-	samplerInfo.magFilter = textureFilterMode;
+	samplerInfo.minFilter = settings.textureFilterMode;
+	samplerInfo.magFilter = settings.textureFilterMode;
 	samplerInfo.maxAnisotropy = 1.0f;
 	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -1343,7 +1331,7 @@ VulkanContext::~VulkanContext() {
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 
-	for (auto [name, shader] : m_shaders) {
+	for (auto shader : m_shaders) {
 		vkDestroyShaderModule(m_device, shader, nullptr);
 	}
 

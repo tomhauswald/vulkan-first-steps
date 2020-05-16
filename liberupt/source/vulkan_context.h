@@ -9,7 +9,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
-#include <png.hpp>
+#include <png++/png.hpp>
 #include <optional>
 
 #include "common.h"
@@ -46,6 +46,15 @@ struct VulkanTextureInfo {
 	VkDeviceMemory memory;
 
 	std::array<VkDescriptorSet, numSlots> samplerSlotDescriptorSets;
+};
+
+struct VulkanPipelineSettings {
+  std::string vertexShaderPath;
+  std::string fragmentShaderPath;
+  VkVertexInputBindingDescription vertexInputBinding;
+  std::vector<VkVertexInputAttributeDescription> vertexInputAttribs;
+  bool enableDepthTest;
+  VkFilter textureFilterMode;
 };
 
 class VulkanContext {
@@ -99,7 +108,7 @@ private:
 
 	std::tuple<VkImage, VkImageView, VkDeviceMemory> m_depthBuffer;
 	
-	std::unordered_map<std::string, VkShaderModule> m_shaders;
+	std::vector<VkShaderModule> m_shaders;
 
 	VkVertexInputBindingDescription m_vertexBinding;
 	std::vector<VkVertexInputAttributeDescription> m_vertexAttributes;
@@ -179,17 +188,10 @@ public:
 	void createSwapchain(bool vsync);
 	void createDepthBuffer();
 	
-	VkShaderModule const& loadShader(std::string const& name);
+	VkShaderModule const& loadShader(std::string const& path);
 	void accomodateWindow(GLFWwindow* window);
 
-	void createPipeline(
-		std::string const& vertexShaderName,
-		std::string const& fragmentShaderName,
-		VkVertexInputBindingDescription const& binding,
-		std::vector<VkVertexInputAttributeDescription> const& attributes,
-		bool enableDepthTest,
-		VkFilter textureFilterMode
-	);
+	void createPipeline(VulkanPipelineSettings const& settings);
 
 	VulkanTextureInfo createTexture(uint32_t width, uint32_t height, uint32_t const* pixels);
 	VulkanBufferInfo createVertexBuffer(std::vector<VPositionColorTexcoord> const& vertices);
