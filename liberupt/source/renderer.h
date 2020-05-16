@@ -2,7 +2,12 @@
 
 #include <vulkan/vulkan_core.h>
 
+#ifndef GLM_ENABLE_EXPERIMENTAL
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
+#undef GLM_ENABLE_EXPERIMENTAL
+#endif
+
 #include <map>
 #include <unordered_map>
 
