@@ -36,7 +36,9 @@ struct System {
   template <size_t Index>
   using NthComponentType = std::tuple_element_t<Index, std::tuple<Cs...>>;
 
-  virtual void update(float dt, Cs&...) = 0;
+  virtual void setup() = 0;
+  virtual void apply(size_t, Cs&...) = 0;
+  virtual void teardown() = 0;
 };
 
 template <typename... Ss>
@@ -64,8 +66,8 @@ class EntityComponentSystem {
   template <size_t Index>
   using NthSystemType = typename SystemListT::template NthType<Index>;
 
-  typename ComponentListT::template Storage<MaxEntities> components;
-  typename SystemListT::Storage systems;
+  EntityComponentSystem() { setupSystems(); }
+  virtual ~EntityComponentSystem() { teardownSystems(); }
 
   template <typename C>
   bool hasComponent(size_t id) const {
@@ -75,7 +77,7 @@ class EntityComponentSystem {
   template <typename C>
   C& addComponent(size_t id) {
     entityComponentMasks_[id].set(componentTypeIndex<C>());
-    return std::get<componentTypeIndex<C>()>(components)[id];
+    return std::get<componentTypeIndex<C>()>(components_)[id];
   }
 
   template <typename C>
@@ -85,11 +87,13 @@ class EntityComponentSystem {
 
   size_t createEntity() { return numActiveEntities_++; }
 
-  void update(float dt) {
-    for (size_t e = 0; e < numActiveEntities_; ++e) updateSystems(e, dt);
+  void tick() {
+    for (size_t e = 0; e < numActiveEntities_; ++e) applySystems(e);
   }
 
  private:
+  typename ComponentListT::template Storage<MaxEntities> components_;
+  typename SystemListT::Storage systems_;
   size_t numActiveEntities_ = 0;
   std::array<ComponentMask, kMaxEntities> entityComponentMasks_ = {};
 
@@ -114,23 +118,43 @@ class EntityComponentSystem {
       return std::make_tuple();
     } else {
       using C = typename S::template NthComponentType<Index>;
-      auto& c = std::get<std::array<C, MaxEntities>>(components)[e];
+      auto& c = std::get<std::array<C, MaxEntities>>(components_)[e];
       return std::tuple_cat(std::forward_as_tuple(c),
                             getSystemComponents<S, Index + 1>(e));
     }
   }
 
   template <size_t Index = 0>
-  void updateSystems(size_t e, float dt) {
+  void setupSystems() {
+    if constexpr (Index < kNumSystemTypes) {
+      std::get<Index>(systems_).setup();
+      if constexpr (Index < kNumSystemTypes - 1) {
+        setupSystems<Index + 1>();
+      }
+    };
+  }
+
+  template <size_t Index = 0>
+  void teardownSystems() {
+    if constexpr (Index < kNumSystemTypes) {
+      std::get<Index>(systems_).teardown();
+      if constexpr (Index < kNumSystemTypes - 1) {
+        teardownSystems<Index + 1>();
+      }
+    };
+  }
+
+  template <size_t Index = 0>
+  void applySystems(size_t e) {
     if constexpr (Index < kNumSystemTypes) {
       using SystemType = NthSystemType<Index>;
       if (isSystemApplicable<SystemType>(e)) {
-        auto& sys = std::get<Index>(systems);
-        std::apply([&](auto&&... components) { sys.update(dt, components...); },
+        auto& sys = std::get<Index>(systems_);
+        std::apply([&](auto&&... components) { sys.apply(e, components...); },
                    getSystemComponents<SystemType>(e));
       }
       if constexpr (Index < kNumSystemTypes - 1) {
-        updateSystems<Index + 1>(e, dt);
+        applySystems<Index + 1>(e);
       }
     };
   }

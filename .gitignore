@@ -20,6 +20,7 @@ compile_commands.json
 CTestTestfile.cmake
 
 *.elf
+*.s
 
 # Prerequisites
 *.d
