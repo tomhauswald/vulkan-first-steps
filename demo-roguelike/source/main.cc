@@ -44,8 +44,8 @@ int main() {
                    glm::vec3{corrL, corrH, corrW},
                    static_cast<Dir>(Dir::East | Dir::West));
 
-  engine.add<FirstPersonController>(3.0f, 6.0f, 60.0f)
-      .setEye({4.5f, 2.0f, 4.5f});
+  /*engine.add<FirstPersonController>(3.0f, 6.0f, 60.0f)
+      .setEye({4.5f, 2.0f, 4.5f});*/
 
   /*auto& player = engine.add<Player>();
   player.setPosition({ 3, 1, 4 });

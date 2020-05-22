@@ -2,6 +2,7 @@
 
 #include <liberupt/source/keyboard.h>
 #include <liberupt/source/mouse.h>
+#include <liberupt/source/renderer.h>
 
 #include <glm/gtx/rotate_vector.hpp>
 #include <liberupt-ecs/ecs.hh>
@@ -12,45 +13,31 @@ struct CCameraTransform3d {
   bool m_captureMouse = true;
 };
 
-struct SCameraController : public System<CCameraTransform3d>{
-  void update(float dt, CCameraTransform3d& cam) override { cam.ey}
+struct SCameraController : public System<CCameraTransform3d> {
+  Keyboard* keyboard = nullptr;
+  Mouse* mouse = nullptr;
+  bool captureMouse = true;
+  Camera3d* camera = nullptr;
+
+  void setup() override {
+    // TODO: mouse=..., keyboard=...;
+    mouse->setCursorMode(CursorMode::Centered);
+  }
+  void teardown() override {}
+
+  virtual void apply(size_t id, CCameraTransform3d& cam) override {
+    if (keyboard->pressed(GLFW_KEY_ESCAPE)) {
+      captureMouse = !captureMouse;
+      mouse->setCursorMode(captureMouse ? CursorMode::Centered
+                                        : CursorMode::Normal);
+
+      camera->setPosition(cam.eye);
+      camera->lookAt(cam.target);
+    }
+  };
 };
 
-public:
-CameraController(Engine3d& e)
-    : GameObject3d(e),
-      m_cam(e.renderer().camera3d()),
-      m_eye(0, 0, 0),
-      m_target(0, 0, 1),
-      m_kb(e.renderer().keyboard()),
-      m_mouse(e.renderer().mouse()),
-      m_captureMouse(true) {
-  m_engine.renderer().mouse().setCursorMode(CursorMode::Centered);
-}
-
-virtual void update(float dt) override {
-  if (m_kb.pressed(GLFW_KEY_ESCAPE)) {
-    m_captureMouse = !m_captureMouse;
-    m_mouse.setCursorMode(m_captureMouse ? CursorMode::Centered
-                                         : CursorMode::Normal);
-  }
-
-  m_cam.setPosition(m_eye);
-  m_cam.lookAt(m_target);
-
-  GameObject3d::update(dt);
-}
-
-virtual ~CameraController() = default;
-
-GETTER(eye, m_eye)
-GETTER(target, m_target)
-
-SETTER(setEye, m_eye)
-SETTER(setTarget, m_target)
-}
-;
-
+/*
 class FirstPersonController : public CameraController {
  private:
   static constexpr float pitchRadius = 89.9f;
@@ -194,4 +181,4 @@ class ThirdPersonController : public CameraController {
   }
 
   virtual ~ThirdPersonController() = default;
-};
+};*/
